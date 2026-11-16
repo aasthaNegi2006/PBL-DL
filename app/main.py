@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from src.model import ISLGestureRecognizer
 from src.dataset import CLASSES
@@ -91,6 +92,87 @@ def get_eval_image(filename: str):
         if os.path.exists(filepath):
             return FileResponse(filepath)
     return JSONResponse(status_code=404, content={"error": "File not found"})
+
+class FrameSequencePayload(BaseModel):
+    frames: list[str]
+
+@app.post("/api/predict-frames")
+def predict_from_base64_frames(payload: FrameSequencePayload):
+    import base64
+    net = get_model()
+    
+    raw_b64 = payload.frames
+    if len(raw_b64) == 0:
+        return JSONResponse(status_code=400, content={"error": "No frames provided."})
+        
+    decoded_frames = []
+    for item in raw_b64:
+        if "," in item:
+            item = item.split(",")[1]
+        img_bytes = base64.b64decode(item)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is not None:
+            rgb = cv2.cvtColor(cv2.resize(img, (112, 112)), cv2.COLOR_BGR2RGB)
+            decoded_frames.append(rgb)
+            
+    if len(decoded_frames) < 8:
+        return JSONResponse(status_code=400, content={"error": "Insufficient frames received."})
+        
+    # 1. Measure inter-frame gesture motion
+    diffs = [
+        np.mean(cv2.absdiff(decoded_frames[i], decoded_frames[i-1]))
+        for i in range(1, len(decoded_frames))
+    ]
+    avg_motion = float(np.mean(diffs)) if diffs else 0.0
+    
+    # Idle / resting filter: if user is not actively moving hands, do not trigger false alarm
+    if avg_motion < 2.5:
+        return {
+            "prediction": "idle",
+            "is_idle": True,
+            "confidence_percentage": 0.0,
+            "avg_motion": round(avg_motion, 2),
+            "message": "Idle / No active gesture detected. Place hands in box and perform sign.",
+            "class_probabilities": {c: 0.0 for c in CLASSES}
+        }
+        
+    indices = np.linspace(0, len(decoded_frames) - 1, 16, dtype=int)
+    sampled = np.array(decoded_frames)[indices].astype(np.float32) / 255.0
+    
+    tensor = torch.from_numpy(sampled).permute(0, 3, 1, 2).float().unsqueeze(0).to(DEVICE)
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 1, 3, 1, 1).to(DEVICE)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 1, 3, 1, 1).to(DEVICE)
+    tensor = (tensor - mean) / std
+    
+    with torch.no_grad():
+        logits, _ = net(tensor)
+        probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+        
+    top_idx = int(np.argmax(probs))
+    pred_class = CLASSES[top_idx]
+    confidence = float(probs[top_idx])
+    
+    breakdown = {CLASSES[i]: float(probs[i]) for i in range(len(CLASSES))}
+    
+    # Confidence threshold: require at least 75% confidence to declare a sign
+    if confidence < 0.75:
+        return {
+            "prediction": "detecting",
+            "is_idle": False,
+            "confidence_percentage": round(confidence * 100, 2),
+            "avg_motion": round(avg_motion, 2),
+            "message": f"Detecting gesture... ({pred_class} {int(confidence*100)}%)",
+            "class_probabilities": breakdown
+        }
+        
+    return {
+        "prediction": pred_class,
+        "is_idle": False,
+        "confidence_percentage": round(confidence * 100, 2),
+        "avg_motion": round(avg_motion, 2),
+        "class_probabilities": breakdown
+    }
 
 @app.post("/api/predict")
 async def predict_gesture(file: UploadFile = File(...)):

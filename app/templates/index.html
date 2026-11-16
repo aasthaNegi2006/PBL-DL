@@ -168,27 +168,53 @@
     <div class="grid">
       <!-- Section 1: Video Inference Test -->
       <div class="card">
-        <h2>Upload & Test Video Gesture</h2>
+        <h2>Live Webcam & Video Test</h2>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+          <button class="btn" id="webcamBtn" style="margin-top: 0; background: var(--accent); color: #fff;" onclick="toggleWebcam()">
+            Start Browser Webcam
+          </button>
+          <button class="btn" id="uploadBtn" style="margin-top: 0; background: #334155; color: #fff;" onclick="document.getElementById('videoInput').click()">
+            Upload Video File
+          </button>
+        </div>
+
+        <!-- Live Webcam Video Element -->
+        <div id="webcamContainer" style="display: none; text-align: center; margin-bottom: 14px; position: relative;">
+          <div style="position: relative; display: inline-block; width: 100%; max-width: 480px;">
+            <video id="webcamVideo" autoplay playsinline muted style="width: 100%; border-radius: 8px; border: 2px solid var(--accent); background: #000;"></video>
+            <!-- Gesture ROI Box Overlay -->
+            <div id="roiBox" style="position: absolute; top: 15%; left: 20%; width: 60%; height: 70%; border: 2px dashed #00ffcc; border-radius: 6px; pointer-events: none; box-shadow: 0 0 10px rgba(0,255,204,0.3);">
+              <span style="position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,0.65); color: #00ffcc; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                PLACE HANDS IN THIS BOX
+              </span>
+            </div>
+          </div>
+          <div id="motionStatus" style="font-size: 13px; color: var(--text-muted); font-weight: 600; margin-top: 6px;">
+            Status: Initializing...
+          </div>
+        </div>
+
         <div class="drop-zone" id="dropZone" onclick="document.getElementById('videoInput').click()">
           <svg style="width: 42px; height: 42px; fill: var(--primary); margin-bottom: 8px;" viewBox="0 0 24 24">
             <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
           </svg>
-          <div style="font-weight: 600;">Click to select or drop an ISL video (.avi / .mp4)</div>
-          <p>Samples available in <code>data/raw/</code></p>
+          <div style="font-weight: 600;">Or Drop an ISL Video File Here</div>
+          <p>Files available in <code>data/raw/accident</code>, <code>call</code>, <code>doctor</code>, <code>help</code>, <code>pain</code></p>
           <input type="file" id="videoInput" accept=".avi,.mp4" style="display: none;" onchange="handleFileSelect(event)">
         </div>
 
-        <div id="loading" style="display: none; text-align: center; padding: 20px; color: var(--primary);">
-          Processing video frames & running neural inference...
+        <div id="loading" style="display: none; text-align: center; padding: 15px; color: var(--primary);">
+          Processing gesture sequence...
         </div>
 
         <div class="result-box" id="resultBox">
           <div class="pred-header">
             <div>
               <span style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Detected Gesture</span>
-              <div class="pred-title" id="predTitle">ACCIDENT</div>
+              <div class="pred-title" id="predTitle">WAITING</div>
             </div>
-            <div class="pred-conf" id="predConf">98.5%</div>
+            <div class="pred-conf" id="predConf">0%</div>
           </div>
           
           <div style="margin-top: 14px;">
@@ -198,23 +224,25 @@
         </div>
       </div>
 
-      <!-- Section 2: Real-time OpenCV Instructions -->
+      <!-- Section 2: Real-time OpenCV Instructions & Gesture Guide -->
       <div class="card">
-        <h2>Live Real-Time Webcam App</h2>
-        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 14px;">
-          For live viva and presentation demonstration with your webcam, run the standalone OpenCV desktop application with HUD and audio speech synthesis.
+        <h2>ISL Gesture Reference Guide</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Position your hands inside the green dotted box and perform the corresponding movement:
         </p>
-        
-        <div style="background: #0f172a; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 13px; margin-bottom: 14px; border: 1px solid var(--border);">
+
+        <ul class="details-list" style="margin-bottom: 16px;">
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Accident</span><span class="val" style="font-size: 13px;">Bring both hands inward to collide at center</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Call</span><span class="val" style="font-size: 13px;">Raise hand with curved fingers near ear/face</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Doctor</span><span class="val" style="font-size: 13px;">Place right fingers on left wrist (checking pulse)</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Help</span><span class="val" style="font-size: 13px;">Flat left palm, place right thumb-up fist on it</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Pain</span><span class="val" style="font-size: 13px;">Curled claw-hand twisting in front of chest</span></li>
+        </ul>
+
+        <h3 style="font-size: 15px; margin-top: 12px; margin-bottom: 6px; color: var(--primary);">Desktop OpenCV Window</h3>
+        <div style="background: #0f172a; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; margin-bottom: 8px; border: 1px solid var(--border);">
           <span style="color: #38bdf8;">python</span> -m src.real_time_webcam --source 0
         </div>
-
-        <ul class="details-list">
-          <li><span class="label">Supported Vocabulary</span><span class="val">accident, call, doctor, help, pain</span></li>
-          <li><span class="label">Input Sequence</span><span class="val">16 Frames Rolling Queue</span></li>
-          <li><span class="label">Audio Speech Feedback</span><span class="val">Native Windows SAPI Integration</span></li>
-          <li><span class="label">Interactive Controls</span><span class="val">[Q] Quit | [S] Speech Toggle | [C] Clear</span></li>
-        </ul>
       </div>
     </div>
 
@@ -237,6 +265,145 @@
   </div>
 
   <script>
+    let webcamStream = null;
+    let webcamInterval = null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 112;
+    canvas.height = 112;
+    const ctx = canvas.getContext('2d');
+
+    async function toggleWebcam() {
+      const btn = document.getElementById('webcamBtn');
+      const container = document.getElementById('webcamContainer');
+      const video = document.getElementById('webcamVideo');
+
+      if (webcamStream) {
+        // Stop webcam
+        clearInterval(webcamInterval);
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+        video.srcObject = null;
+        container.style.display = 'none';
+        btn.innerText = 'Start Browser Webcam';
+        btn.style.background = 'var(--accent)';
+      } else {
+        // Start webcam
+        try {
+          webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 320, height: 240, facingMode: 'user' }
+          });
+          video.srcObject = webcamStream;
+          container.style.display = 'block';
+          btn.innerText = 'Stop Browser Webcam';
+          btn.style.background = 'var(--warning)';
+
+          // Accumulate frames every 90ms and predict every 1.4s
+          let frameBuffer = [];
+          webcamInterval = setInterval(async () => {
+            if (video.readyState >= 2) {
+              const vw = video.videoWidth || 640;
+              const vh = video.videoHeight || 480;
+              
+              // Crop exactly the ROI box: 60% width, 70% height
+              const sx = vw * 0.20;
+              const sy = vh * 0.15;
+              const sw = vw * 0.60;
+              const sh = vh * 0.70;
+              
+              ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 112, 112);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+              frameBuffer.push(dataUrl);
+
+              if (frameBuffer.length >= 16) {
+                const batch = [...frameBuffer];
+                frameBuffer = [];
+                try {
+                  const resp = await fetch('/api/predict-frames', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ frames: batch })
+                  });
+                  const result = await resp.json();
+                  
+                  const statusEl = document.getElementById('motionStatus');
+                  if (result.is_idle) {
+                    statusEl.innerHTML = `<span style="color: #94a3b8;">Resting / Idle (Motion: ${result.avg_motion}) &bull; Perform gesture inside box</span>`;
+                    renderPrediction({
+                      prediction: "WAITING (IDLE)",
+                      confidence_percentage: 0,
+                      class_probabilities: { "accident": 0, "call": 0, "doctor": 0, "help": 0, "pain": 0 }
+                    }, false);
+                  } else if (result.prediction === "detecting") {
+                    statusEl.innerHTML = `<span style="color: #38bdf8;">Detecting motion (Energy: ${result.avg_motion})...</span>`;
+                    renderPrediction({
+                      prediction: "DETECTING...",
+                      confidence_percentage: result.confidence_percentage,
+                      class_probabilities: result.class_probabilities
+                    }, false);
+                  } else if (result.prediction) {
+                    statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;">Recognized: ${result.prediction.toUpperCase()} (${result.confidence_percentage}%)</span>`;
+                    renderPrediction(result, true);
+                  }
+                } catch (e) {
+                  console.error('Frame prediction error:', e);
+                }
+              }
+            }
+          }, 90);
+
+        } catch (err) {
+          alert('Could not access webcam: ' + err.message + '\nPlease check camera permissions or use video upload.');
+        }
+      }
+    }
+
+    let lastSpoken = "";
+    let lastSpokenTime = 0;
+
+    function renderPrediction(data, speak = true) {
+      document.getElementById('resultBox').style.display = 'block';
+      const titleEl = document.getElementById('predTitle');
+      const confEl = document.getElementById('predConf');
+
+      titleEl.innerText = data.prediction.toUpperCase();
+      confEl.innerText = data.confidence_percentage ? (data.confidence_percentage + '%') : '--';
+
+      if (data.prediction.includes("WAITING") || data.prediction.includes("DETECTING")) {
+        titleEl.style.color = '#94a3b8';
+      } else {
+        titleEl.style.color = '#10b981';
+      }
+
+      const barsContainer = document.getElementById('probBars');
+      barsContainer.innerHTML = '';
+      for (const [cls, prob] of Object.entries(data.class_probabilities)) {
+        const pct = Math.round(prob * 100);
+        const isTop = (cls === data.prediction.toLowerCase());
+        barsContainer.innerHTML += `
+          <div class="prob-bar-container">
+            <div class="prob-bar-header">
+              <span style="${isTop ? 'font-weight: 700; color: #38bdf8;' : ''}">${cls.charAt(0).toUpperCase() + cls.slice(1)}</span>
+              <span>${pct}%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill ${pct >= 75 ? 'high' : ''}" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      const now = Date.now();
+      if (speak && 'speechSynthesis' in window && data.confidence_percentage >= 75) {
+        if (data.prediction !== lastSpoken || (now - lastSpokenTime) > 3000) {
+          lastSpoken = data.prediction;
+          lastSpokenTime = now;
+          const utterance = new SpeechSynthesisUtterance(data.prediction);
+          utterance.rate = 1.0;
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    }
+
     async function handleFileSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -260,36 +427,7 @@
           return;
         }
 
-        document.getElementById('resultBox').style.display = 'block';
-        document.getElementById('predTitle').innerText = data.prediction.toUpperCase();
-        document.getElementById('predConf').innerText = data.confidence_percentage + '%';
-
-        // Render probability bars
-        const barsContainer = document.getElementById('probBars');
-        barsContainer.innerHTML = '';
-        for (const [cls, prob] of Object.entries(data.class_probabilities)) {
-          const pct = Math.round(prob * 100);
-          const isTop = (cls === data.prediction);
-          barsContainer.innerHTML += `
-            <div class="prob-bar-container">
-              <div class="prob-bar-header">
-                <span style="${isTop ? 'font-weight: 700; color: #38bdf8;' : ''}">${cls.charAt(0).toUpperCase() + cls.slice(1)}</span>
-                <span>${pct}%</span>
-              </div>
-              <div class="prob-bar-bg">
-                <div class="prob-bar-fill ${pct >= 85 ? 'high' : ''}" style="width: ${pct}%;"></div>
-              </div>
-            </div>
-          `;
-        }
-
-        // Voice output using browser SpeechSynthesis
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(data.prediction);
-          utterance.rate = 0.95;
-          window.speechSynthesis.speak(utterance);
-        }
-
+        renderPrediction(data);
       } catch (err) {
         document.getElementById('loading').style.display = 'none';
         alert('Inference error: ' + err.message);

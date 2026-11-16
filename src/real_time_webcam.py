@@ -175,42 +175,63 @@ def run_real_time_inference(source=0, model_path='models/best_isl_model.pth'):
             prev_time = now
             step_counter += 1
             
-            # Preprocess frame for model buffer
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Crop ROI box where hands perform the gesture
+            h, w = frame.shape[:2]
+            panel_w = 280
+            guide_size = min(h - 120, w - panel_w - 60)
+            gx, gy = 30, 75
+            roi = frame[gy:gy+guide_size, gx:gx+guide_size]
+            if roi.shape[0] < 20 or roi.shape[1] < 20:
+                roi = frame
+                
+            frame_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
             frame_resized = cv2.resize(frame_rgb, (112, 112)).astype(np.float32) / 255.0
             frame_buffer.append(frame_resized)
             
             # Run inference every 2 frames when buffer is full
             if len(frame_buffer) == num_frames and (step_counter % 2 == 0):
-                # Prepare tensor (1, T, C, H, W)
-                tensor_seq = torch.from_numpy(np.array(frame_buffer)).permute(0, 3, 1, 2).float().unsqueeze(0).to(device)
-                tensor_seq = (tensor_seq - mean) / std
+                # 1. Motion gating: check if hands are actually moving
+                diffs = [
+                    np.mean(np.abs(frame_buffer[i] - frame_buffer[i-1])) * 255.0
+                    for i in range(1, len(frame_buffer))
+                ]
+                avg_motion = float(np.mean(diffs)) if diffs else 0.0
                 
-                with torch.no_grad():
-                    logits, _ = model(tensor_seq)
-                    raw_probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
-                    
-                # Exponential moving average filter
-                smoothed_probs = 0.65 * raw_probs + 0.35 * smoothed_probs
-                top_idx = int(np.argmax(smoothed_probs))
-                top_conf = float(smoothed_probs[top_idx])
-                
-                if top_conf >= 0.70:
-                    pred_name = CLASSES[top_idx]
-                    current_pred = pred_name
-                    current_conf = top_conf
-                    consecutive_hits += 1
-                    
-                    if consecutive_hits >= 3 and top_conf >= 0.85:
-                        entry = f"{pred_name.upper()} ({int(top_conf*100)}%)"
-                        if len(history) == 0 or history[-1].split()[0] != pred_name.upper():
-                            history.append(entry)
-                            tts.speak(pred_name)
+                if avg_motion < 2.5:
+                    current_pred = "Waiting (Idle)"
+                    current_conf = 0.0
+                    consecutive_hits = 0
+                    smoothed_probs = np.zeros(len(CLASSES), dtype=np.float32)
                 else:
-                    consecutive_hits = max(0, consecutive_hits - 1)
-                    if consecutive_hits == 0:
+                    # Prepare tensor (1, T, C, H, W)
+                    tensor_seq = torch.from_numpy(np.array(frame_buffer)).permute(0, 3, 1, 2).float().unsqueeze(0).to(device)
+                    tensor_seq = (tensor_seq - mean) / std
+                    
+                    with torch.no_grad():
+                        logits, _ = model(tensor_seq)
+                        raw_probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+                        
+                    # Exponential moving average filter
+                    smoothed_probs = 0.65 * raw_probs + 0.35 * smoothed_probs
+                    top_idx = int(np.argmax(smoothed_probs))
+                    top_conf = float(smoothed_probs[top_idx])
+                    
+                    if top_conf >= 0.75:
+                        pred_name = CLASSES[top_idx]
+                        current_pred = pred_name
                         current_conf = top_conf
-                        current_pred = "Waiting"
+                        consecutive_hits += 1
+                        
+                        if consecutive_hits >= 3 and top_conf >= 0.85:
+                            entry = f"{pred_name.upper()} ({int(top_conf*100)}%)"
+                            if len(history) == 0 or history[-1].split()[0] != pred_name.upper():
+                                history.append(entry)
+                                tts.speak(pred_name)
+                    else:
+                        consecutive_hits = max(0, consecutive_hits - 1)
+                        if consecutive_hits == 0:
+                            current_conf = top_conf
+                            current_pred = "Detecting..."
 
             # Render HUD
             class_prob_dict = {CLASSES[i]: float(smoothed_probs[i]) for i in range(len(CLASSES))}
