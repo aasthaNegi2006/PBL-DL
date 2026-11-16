@@ -158,8 +158,8 @@
         <p style="color: var(--text-muted); font-size: 14px;">Deep Spatio-Temporal Video Gesture Recognition for Emergency Assistance</p>
       </div>
       <div class="badges">
-        <span class="badge success">Validation Accuracy: 100.0%</span>
-        <span class="badge success">Unseen Subjects: 98.0%</span>
+        <span class="badge" id="cvBadge">Unseen signers (CV): run src.cross_validate</span>
+        <span class="badge" id="testBadge">Held-out signers: run src.evaluate</span>
         <span class="badge model">PyTorch CNN + BiGRU + Attention</span>
         <span class="badge">Target Threshold: >= 85%</span>
       </div>
@@ -184,9 +184,9 @@
           <div style="position: relative; display: inline-block; width: 100%; max-width: 480px;">
             <video id="webcamVideo" autoplay playsinline muted style="width: 100%; border-radius: 8px; border: 2px solid var(--accent); background: #000;"></video>
             <!-- Gesture ROI Box Overlay -->
-            <div id="roiBox" style="position: absolute; top: 15%; left: 20%; width: 60%; height: 70%; border: 2px dashed #00ffcc; border-radius: 6px; pointer-events: none; box-shadow: 0 0 10px rgba(0,255,204,0.3);">
+            <div id="roiBox" style="position: absolute; top: 5%; left: 16.25%; width: 67.5%; height: 90%; border: 2px dashed #00ffcc; border-radius: 6px; pointer-events: none; box-shadow: 0 0 10px rgba(0,255,204,0.3);">
               <span style="position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,0.65); color: #00ffcc; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                PLACE HANDS IN THIS BOX
+                SIGN INSIDE THIS BOX
               </span>
             </div>
           </div>
@@ -201,7 +201,7 @@
           </svg>
           <div style="font-weight: 600;">Or Drop an ISL Video File Here</div>
           <p>Files available in <code>data/raw/accident</code>, <code>call</code>, <code>doctor</code>, <code>help</code>, <code>pain</code></p>
-          <input type="file" id="videoInput" accept=".avi,.mp4" style="display: none;" onchange="handleFileSelect(event)">
+          <input type="file" id="videoInput" accept=".avi,.mp4,.mov,.mkv,.webm" style="display: none;" onchange="handleFileSelect(event)">
         </div>
 
         <div id="loading" style="display: none; text-align: center; padding: 15px; color: var(--primary);">
@@ -228,7 +228,7 @@
       <div class="card">
         <h2>ISL Gesture Reference Guide</h2>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
-          Position your hands inside the green dotted box and perform the corresponding movement:
+          Sign inside the dotted box and perform the whole movement (about 2-3 seconds):
         </p>
 
         <ul class="details-list" style="margin-bottom: 16px;">
@@ -260,17 +260,141 @@
     </div>
 
     <footer>
-      Indian Sign Language (ISL) Recognition Project &bull; UPES Internal Evaluation &bull; Accuracy: 100% (Target: >=85%)
+      Indian Sign Language (ISL) Recognition Project &bull; UPES Internal Evaluation &bull; Target: >= 85% on unseen signers
     </footer>
   </div>
 
   <script>
+    // Live input must match training: keep a gesture-length window of frames and send
+    // 16 frames spread evenly across it, with overlapping windows so no sign is cut in half.
+    // The server crops each frame to the same centre box as the desktop app.
+    let modelInfo = { window_seconds: 2.5, num_frames_per_sequence: 16, roi: { cx: 0.5, cy: 0.5, size: 0.9 }, confidence_threshold: 0.75 };
+    const CAPTURE_MS = 66;          // ~15 frames per second
+    const PREDICT_EVERY_MS = 500;   // overlapping windows, one request at a time
+    const SEND_MAX_WIDTH = 320;
+
     let webcamStream = null;
     let webcamInterval = null;
+    let frameBuffer = [];           // [{t, dataUrl}]
+    let inFlight = false;
+    let lastPredict = 0;
     const canvas = document.createElement('canvas');
-    canvas.width = 112;
-    canvas.height = 112;
     const ctx = canvas.getContext('2d');
+
+    function setBadge(id, text, ok) {
+      const el = document.getElementById(id);
+      el.innerText = text;
+      el.className = 'badge' + (ok ? ' success' : '');
+    }
+
+    async function loadInfo() {
+      try {
+        const resp = await fetch('/api/info');
+        modelInfo = await resp.json();
+        const cv = modelInfo.cross_validation || {};
+        const test = modelInfo.evaluation_summary || {};
+        if (cv.accuracy_mean !== undefined) {
+          setBadge('cvBadge', `Unseen signers (CV): ${cv.accuracy_mean}% ± ${cv.accuracy_std}`, cv.accuracy_mean >= 85);
+        }
+        if (test.accuracy_percent !== undefined && test.split === 'test') {
+          setBadge('testBadge', `Held-out signers ${test.eval_subjects.join(', ')}: ${test.accuracy_percent}%`, test.threshold_satisfied);
+        }
+        if (!modelInfo.model_loaded) {
+          document.getElementById('motionStatus').innerText = modelInfo.model_error || 'Model not loaded.';
+        }
+      } catch (e) {
+        console.error('Could not load /api/info', e);
+      }
+    }
+    loadInfo();
+
+    // Same formula as src/preprocess.py roi_box()
+    function roiBox(w, h, roi) {
+      let side = Math.round(roi.size * Math.min(w, h));
+      side = Math.max(1, Math.min(side, w, h));
+      let x0 = Math.round(roi.cx * w - side / 2);
+      let y0 = Math.round(roi.cy * h - side / 2);
+      x0 = Math.min(Math.max(0, x0), w - side);
+      y0 = Math.min(Math.max(0, y0), h - side);
+      return { x0, y0, side };
+    }
+
+    function positionRoiBox(video) {
+      const w = video.videoWidth, h = video.videoHeight;
+      if (!w || !h) return;
+      const b = roiBox(w, h, modelInfo.roi);
+      const box = document.getElementById('roiBox');
+      box.style.left = (100 * b.x0 / w) + '%';
+      box.style.top = (100 * b.y0 / h) + '%';
+      box.style.width = (100 * b.side / w) + '%';
+      box.style.height = (100 * b.side / h) + '%';
+    }
+
+    function sampleEvenly(items, k) {
+      const n = items.length;
+      return Array.from({ length: k }, (_, i) => items[Math.floor(i * (n - 1) / (k - 1))]);
+    }
+
+    function setStatus(html) {
+      document.getElementById('motionStatus').innerHTML = html;
+    }
+
+    async function sendWindow() {
+      inFlight = true;
+      lastPredict = performance.now();
+      const frames = sampleEvenly(frameBuffer, modelInfo.num_frames_per_sequence).map(f => f.dataUrl);
+      try {
+        const resp = await fetch('/api/predict-frames', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frames, crop: true })
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          setStatus(`<span style="color: #f87171;">${result.detail || 'Prediction failed'}</span>`);
+          return;
+        }
+        if (result.is_idle) {
+          setStatus(`<span style="color: #94a3b8;">Resting / idle (motion ${result.avg_motion}) &bull; sign inside the box</span>`);
+          renderPrediction({ prediction: 'WAITING (IDLE)', confidence_percentage: 0, class_probabilities: result.class_probabilities }, false);
+        } else if (result.prediction === 'none') {
+          setStatus(`<span style="color: #94a3b8;">Movement is not one of the emergency signs</span>`);
+          renderPrediction({ ...result, prediction: 'NO SIGN' }, false);
+        } else if (result.prediction === 'detecting') {
+          setStatus(`<span style="color: #38bdf8;">Detecting (motion ${result.avg_motion})...</span>`);
+          renderPrediction({ ...result, prediction: 'DETECTING...' }, false);
+        } else {
+          setStatus(`<span style="color: #10b981; font-weight: 700;">Recognized: ${result.prediction.toUpperCase()} (${result.confidence_percentage}%)</span>`);
+          renderPrediction(result, true);
+        }
+      } catch (e) {
+        console.error('Frame prediction error:', e);
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function captureFrame(video) {
+      if (video.readyState < 2) return;
+      const vw = video.videoWidth || 640;
+      const vh = video.videoHeight || 480;
+      const scale = Math.min(1, SEND_MAX_WIDTH / vw);
+      canvas.width = Math.round(vw * scale);
+      canvas.height = Math.round(vh * scale);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const t = performance.now() / 1000;
+      frameBuffer.push({ t, dataUrl: canvas.toDataURL('image/jpeg', 0.8) });
+      while (frameBuffer.length && t - frameBuffer[0].t > modelInfo.window_seconds) frameBuffer.shift();
+
+      const span = frameBuffer.length > 1 ? t - frameBuffer[0].t : 0;
+      const ready = frameBuffer.length >= modelInfo.num_frames_per_sequence && span >= 0.9 * modelInfo.window_seconds;
+      if (!ready) {
+        setStatus(`<span style="color: #94a3b8;">Filling gesture window... ${Math.round(100 * span / modelInfo.window_seconds)}%</span>`);
+      } else if (!inFlight && performance.now() - lastPredict >= PREDICT_EVERY_MS) {
+        sendWindow();
+      }
+    }
 
     async function toggleWebcam() {
       const btn = document.getElementById('webcamBtn');
@@ -278,82 +402,30 @@
       const video = document.getElementById('webcamVideo');
 
       if (webcamStream) {
-        // Stop webcam
         clearInterval(webcamInterval);
         webcamStream.getTracks().forEach(track => track.stop());
         webcamStream = null;
         video.srcObject = null;
+        frameBuffer = [];
         container.style.display = 'none';
         btn.innerText = 'Start Browser Webcam';
         btn.style.background = 'var(--accent)';
-      } else {
-        // Start webcam
-        try {
-          webcamStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 320, height: 240, facingMode: 'user' }
-          });
-          video.srcObject = webcamStream;
-          container.style.display = 'block';
-          btn.innerText = 'Stop Browser Webcam';
-          btn.style.background = 'var(--warning)';
+        return;
+      }
 
-          // Accumulate frames every 90ms and predict every 1.4s
-          let frameBuffer = [];
-          webcamInterval = setInterval(async () => {
-            if (video.readyState >= 2) {
-              const vw = video.videoWidth || 640;
-              const vh = video.videoHeight || 480;
-              
-              // Crop exactly the ROI box: 60% width, 70% height
-              const sx = vw * 0.20;
-              const sy = vh * 0.15;
-              const sw = vw * 0.60;
-              const sh = vh * 0.70;
-              
-              ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 112, 112);
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-              frameBuffer.push(dataUrl);
-
-              if (frameBuffer.length >= 16) {
-                const batch = [...frameBuffer];
-                frameBuffer = [];
-                try {
-                  const resp = await fetch('/api/predict-frames', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ frames: batch })
-                  });
-                  const result = await resp.json();
-                  
-                  const statusEl = document.getElementById('motionStatus');
-                  if (result.is_idle) {
-                    statusEl.innerHTML = `<span style="color: #94a3b8;">Resting / Idle (Motion: ${result.avg_motion}) &bull; Perform gesture inside box</span>`;
-                    renderPrediction({
-                      prediction: "WAITING (IDLE)",
-                      confidence_percentage: 0,
-                      class_probabilities: { "accident": 0, "call": 0, "doctor": 0, "help": 0, "pain": 0 }
-                    }, false);
-                  } else if (result.prediction === "detecting") {
-                    statusEl.innerHTML = `<span style="color: #38bdf8;">Detecting motion (Energy: ${result.avg_motion})...</span>`;
-                    renderPrediction({
-                      prediction: "DETECTING...",
-                      confidence_percentage: result.confidence_percentage,
-                      class_probabilities: result.class_probabilities
-                    }, false);
-                  } else if (result.prediction) {
-                    statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;">Recognized: ${result.prediction.toUpperCase()} (${result.confidence_percentage}%)</span>`;
-                    renderPrediction(result, true);
-                  }
-                } catch (e) {
-                  console.error('Frame prediction error:', e);
-                }
-              }
-            }
-          }, 90);
-
-        } catch (err) {
-          alert('Could not access webcam: ' + err.message + '\nPlease check camera permissions or use video upload.');
-        }
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        video.srcObject = webcamStream;
+        video.onloadedmetadata = () => positionRoiBox(video);
+        container.style.display = 'block';
+        btn.innerText = 'Stop Browser Webcam';
+        btn.style.background = 'var(--warning)';
+        frameBuffer = [];
+        webcamInterval = setInterval(() => captureFrame(video), CAPTURE_MS);
+      } catch (err) {
+        alert('Could not access webcam: ' + err.message + '\nPlease check camera permissions or use video upload.');
       }
     }
 
@@ -364,19 +436,16 @@
       document.getElementById('resultBox').style.display = 'block';
       const titleEl = document.getElementById('predTitle');
       const confEl = document.getElementById('predConf');
+      const label = data.prediction.toUpperCase();
 
-      titleEl.innerText = data.prediction.toUpperCase();
+      const neutral = ['WAITING', 'DETECTING', 'NO SIGN'].some(s => label.includes(s));
+      titleEl.innerText = label + (data.low_confidence && !neutral ? ' (low confidence)' : '');
       confEl.innerText = data.confidence_percentage ? (data.confidence_percentage + '%') : '--';
-
-      if (data.prediction.includes("WAITING") || data.prediction.includes("DETECTING")) {
-        titleEl.style.color = '#94a3b8';
-      } else {
-        titleEl.style.color = '#10b981';
-      }
+      titleEl.style.color = (neutral || data.low_confidence) ? '#94a3b8' : '#10b981';
 
       const barsContainer = document.getElementById('probBars');
       barsContainer.innerHTML = '';
-      for (const [cls, prob] of Object.entries(data.class_probabilities)) {
+      for (const [cls, prob] of Object.entries(data.class_probabilities || {})) {
         const pct = Math.round(prob * 100);
         const isTop = (cls === data.prediction.toLowerCase());
         barsContainer.innerHTML += `
@@ -393,7 +462,7 @@
       }
 
       const now = Date.now();
-      if (speak && 'speechSynthesis' in window && data.confidence_percentage >= 75) {
+      if (speak && !neutral && !data.low_confidence && 'speechSynthesis' in window) {
         if (data.prediction !== lastSpoken || (now - lastSpokenTime) > 3000) {
           lastSpoken = data.prediction;
           lastSpokenTime = now;
@@ -415,22 +484,19 @@
       document.getElementById('resultBox').style.display = 'none';
 
       try {
-        const response = await fetch('/api/predict', {
-          method: 'POST',
-          body: formData
-        });
+        const response = await fetch('/api/predict', { method: 'POST', body: formData });
         const data = await response.json();
-        
         document.getElementById('loading').style.display = 'none';
-        if (data.error) {
-          alert('Error: ' + data.error);
+        if (!response.ok) {
+          alert('Error: ' + (data.detail || response.statusText));
           return;
         }
-
-        renderPrediction(data);
+        renderPrediction(data.prediction === 'none' ? { ...data, prediction: 'NO SIGN' } : data);
       } catch (err) {
         document.getElementById('loading').style.display = 'none';
         alert('Inference error: ' + err.message);
+      } finally {
+        event.target.value = '';
       }
     }
   </script>

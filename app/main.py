@@ -1,240 +1,249 @@
-import os
-import io
+import base64
+import binascii
 import json
+import os
+import shutil
 import tempfile
-import cv2
-import torch
-import numpy as np
-from fastapi import FastAPI, File, UploadFile, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import threading
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Annotated
 
-from src.model import ISLGestureRecognizer
-from src.dataset import CLASSES
+import cv2
+import numpy as np
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field, StringConstraints
+
+from src import preprocess as P
+from src.dataset import NONE_CLASS
+from src.inference import CONFIDENCE_THRESHOLD, load_model, predict_clip, sample_clip
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = Path(os.environ.get('ISL_MODEL_PATH', BASE_DIR / 'models' / 'best_isl_model.pth'))
+EVAL_DIR = BASE_DIR / 'eval_results'
+TEMPLATE_PATH = BASE_DIR / 'app' / 'templates' / 'index.html'
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024   # 50 MB
+MAX_VIDEO_FRAMES = 900                # 30 s at 30 FPS; a single sign is 2-4 s
+MAX_LIVE_FRAMES = 64
+MAX_FRAME_B64_CHARS = 400_000         # ~300 KB JPEG per frame
+MIN_LIVE_FRAMES = 8
+VIDEO_EXTS = {'.avi', '.mp4', '.mov', '.mkv', '.webm'}
+EVAL_FILES = {'confusion_matrix.png', 'training_curves.png', 'classification_report.txt',
+              'cv_confusion_matrix.png', 'cv_classification_report.txt'}
+
+_model_lock = threading.Lock()
+_state = {'lm': None, 'error': None}
+
+
+def get_model():
+    """Load the model on first use. Returns 503 (not a crash) if it is missing."""
+    if _state['lm'] is None:
+        with _model_lock:
+            if _state['lm'] is None:
+                if not Path(MODEL_PATH).exists():
+                    _state['error'] = f'Model file not found at {MODEL_PATH}. Train one with: python -m src.train'
+                    raise HTTPException(status_code=503, detail=_state['error'])
+                _state['lm'] = load_model(MODEL_PATH)
+                _state['error'] = None
+                print(f'Loaded ISL model from {MODEL_PATH} on {_state["lm"].device}.')
+    return _state['lm']
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    try:
+        get_model()
+    except Exception as e:  # keep serving the dashboard; prediction endpoints return 503
+        detail = getattr(e, 'detail', e)
+        print(f'Warning on startup: {detail}')
+    yield
+
 
 app = FastAPI(
     title="Indian Sign Language (ISL) Recognition API",
     description="Emergency gesture recognition powered by PyTorch Spatio-Temporal Deep Learning",
-    version="1.0.0"
+    version="1.1.0",
+    lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# The dashboard is served from this app, so it needs no CORS. To call the API from
+# another site, list its origins, e.g. ISL_CORS_ORIGINS=http://localhost:3000
+_cors_origins = [o.strip() for o in os.environ.get('ISL_CORS_ORIGINS', '').split(',') if o.strip()]
+if _cors_origins:
+    app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=['GET', 'POST'],
+                       allow_headers=['Content-Type'])
 
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-MODEL_PATH = 'models/best_isl_model.pth'
 
-model = None
-checkpoint_meta = {}
+def _read_json(path):
+    if path.exists():
+        with open(path) as f:
+            return json.load(f)
+    return {}
 
-def get_model():
-    global model, checkpoint_meta
-    if model is None:
-        if os.path.exists(MODEL_PATH):
-            checkpoint = torch.load(MODEL_PATH, map_location=DEVICE, weights_only=False)
-            checkpoint_meta = {
-                'epoch': checkpoint.get('epoch', 40),
-                'val_acc': checkpoint.get('val_acc', 100.0),
-                'num_frames': checkpoint.get('num_frames', 16),
-                'classes': checkpoint.get('classes', CLASSES)
-            }
-            model = ISLGestureRecognizer(
-                num_classes=len(CLASSES),
-                num_frames=checkpoint.get('num_frames', 16),
-                in_channels=3,
-                feature_dim=checkpoint.get('feature_dim', 256),
-                hidden_dim=checkpoint.get('hidden_dim', 128)
-            ).to(DEVICE)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            model.eval()
-            print("Loaded PyTorch ISL Model successfully.")
-        else:
-            raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
-    return model
 
-@app.on_event("startup")
-def startup_event():
-    try:
-        get_model()
-    except Exception as e:
-        print(f"Warning on startup: {e}")
+def _result(lm, probs, motion=None, extra=None, live=True):
+    """Shared response shape for both prediction endpoints.
+
+    Live predictions below the confidence threshold are reported as "detecting";
+    an uploaded clip always reports its top class, flagged with low_confidence.
+    """
+    top_idx = int(np.argmax(probs))
+    pred_class = lm.classes[top_idx]
+    confidence = float(probs[top_idx])
+    body = {
+        'is_idle': False,
+        'confidence_percentage': round(confidence * 100, 2),
+        'low_confidence': confidence < CONFIDENCE_THRESHOLD,
+        'class_probabilities': {c: float(p) for c, p in zip(lm.classes, probs)},
+    }
+    if motion is not None:
+        body['avg_motion'] = round(motion, 2)
+    if pred_class == NONE_CLASS:
+        body.update(prediction='none', message='No emergency sign recognised.')
+    elif live and confidence < CONFIDENCE_THRESHOLD:
+        body.update(prediction='detecting', top_class=pred_class,
+                    message=f'Detecting gesture... ({pred_class} {int(confidence * 100)}%)')
+    else:
+        body['prediction'] = pred_class
+    body.update(extra or {})
+    return body
+
 
 @app.get("/api/info")
 def get_info():
-    summary_path = "eval_results/summary.json"
-    summary_data = {}
-    if os.path.exists(summary_path):
-        with open(summary_path, "r") as f:
-            summary_data = json.load(f)
-            
+    lm = None
+    try:
+        lm = get_model()
+    except HTTPException:
+        pass
     return {
-        "status": "online",
-        "device": str(DEVICE),
-        "supported_classes": CLASSES,
-        "model_architecture": "Spatio-Temporal CNN + BiGRU + Temporal Attention",
-        "num_frames_per_sequence": 16,
-        "input_resolution": "112x112",
-        "evaluation_summary": summary_data
+        'status': 'online',
+        'model_loaded': lm is not None,
+        'model_error': _state['error'],
+        'device': str(lm.device) if lm else None,
+        'supported_classes': lm.classes if lm else [],
+        'model_architecture': 'Spatio-Temporal CNN + BiGRU + Temporal Attention',
+        'num_frames_per_sequence': lm.num_frames if lm else P.NUM_FRAMES,
+        'window_seconds': lm.window_seconds if lm else P.DEFAULT_WINDOW_SECONDS,
+        'input_resolution': f'{P.IMG_SIZE}x{P.IMG_SIZE}',
+        'roi': P.DEFAULT_ROI,
+        'motion_threshold': P.DEFAULT_MOTION_THRESHOLD,
+        'confidence_threshold': CONFIDENCE_THRESHOLD,
+        'checkpoint': {k: v for k, v in (lm.meta if lm else {}).items() if k != 'split'},
+        'evaluation_summary': _read_json(EVAL_DIR / 'summary.json'),
+        'cross_validation': {k: v for k, v in _read_json(EVAL_DIR / 'cross_validation.json').items() if k != 'folds'},
     }
 
+
 @app.get("/eval-results/{filename}")
-def get_eval_image(filename: str):
-    safe_files = ["confusion_matrix.png", "training_curves.png", "classification_report.txt"]
-    if filename in safe_files:
-        filepath = os.path.join("eval_results", filename)
-        if os.path.exists(filepath):
-            return FileResponse(filepath)
-    return JSONResponse(status_code=404, content={"error": "File not found"})
+def get_eval_file(filename: str):
+    path = EVAL_DIR / filename
+    if filename in EVAL_FILES and path.exists():
+        return FileResponse(path)
+    raise HTTPException(status_code=404, detail='File not found')
+
+
+B64Frame = Annotated[str, StringConstraints(max_length=MAX_FRAME_B64_CHARS)]
+
 
 class FrameSequencePayload(BaseModel):
-    frames: list[str]
+    # Frames spread evenly across the last gesture-length window (see /api/info window_seconds).
+    frames: list[B64Frame] = Field(min_length=1, max_length=MAX_LIVE_FRAMES)
+    # Crop to the same centre box as the desktop app. Set false for already-cropped frames.
+    crop: bool = True
+
 
 @app.post("/api/predict-frames")
 def predict_from_base64_frames(payload: FrameSequencePayload):
-    import base64
-    net = get_model()
-    
-    raw_b64 = payload.frames
-    if len(raw_b64) == 0:
-        return JSONResponse(status_code=400, content={"error": "No frames provided."})
-        
-    decoded_frames = []
-    for item in raw_b64:
-        if "," in item:
-            item = item.split(",")[1]
-        img_bytes = base64.b64decode(item)
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    lm = get_model()
+
+    decoded = []
+    for item in payload.frames:
+        if ',' in item:
+            item = item.split(',', 1)[1]
+        try:
+            img_bytes = base64.b64decode(item, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=400, detail='A frame is not valid base64.')
+        img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
         if img is not None:
-            rgb = cv2.cvtColor(cv2.resize(img, (112, 112)), cv2.COLOR_BGR2RGB)
-            decoded_frames.append(rgb)
-            
-    if len(decoded_frames) < 8:
-        return JSONResponse(status_code=400, content={"error": "Insufficient frames received."})
-        
-    # 1. Measure inter-frame gesture motion
-    diffs = [
-        np.mean(cv2.absdiff(decoded_frames[i], decoded_frames[i-1]))
-        for i in range(1, len(decoded_frames))
-    ]
-    avg_motion = float(np.mean(diffs)) if diffs else 0.0
-    
-    # Idle / resting filter: if user is not actively moving hands, do not trigger false alarm
-    if avg_motion < 2.5:
+            decoded.append(P.prepare_frame(img, crop=payload.crop))
+
+    if len(decoded) < MIN_LIVE_FRAMES:
+        raise HTTPException(status_code=400, detail=f'Need at least {MIN_LIVE_FRAMES} decodable frames, got {len(decoded)}.')
+
+    sampled = sample_clip(decoded, lm.num_frames)
+    motion = P.motion_energy(sampled)
+    # Idle filter: if the hands are not moving, do not raise a false alarm
+    if motion < P.DEFAULT_MOTION_THRESHOLD:
         return {
-            "prediction": "idle",
-            "is_idle": True,
-            "confidence_percentage": 0.0,
-            "avg_motion": round(avg_motion, 2),
-            "message": "Idle / No active gesture detected. Place hands in box and perform sign.",
-            "class_probabilities": {c: 0.0 for c in CLASSES}
+            'prediction': 'idle',
+            'is_idle': True,
+            'confidence_percentage': 0.0,
+            'avg_motion': round(motion, 2),
+            'message': 'Idle / no active gesture detected. Sign inside the box.',
+            'class_probabilities': {c: 0.0 for c in lm.classes},
         }
-        
-    indices = np.linspace(0, len(decoded_frames) - 1, 16, dtype=int)
-    sampled = np.array(decoded_frames)[indices].astype(np.float32) / 255.0
-    
-    tensor = torch.from_numpy(sampled).permute(0, 3, 1, 2).float().unsqueeze(0).to(DEVICE)
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 1, 3, 1, 1).to(DEVICE)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 1, 3, 1, 1).to(DEVICE)
-    tensor = (tensor - mean) / std
-    
-    with torch.no_grad():
-        logits, _ = net(tensor)
-        probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
-        
-    top_idx = int(np.argmax(probs))
-    pred_class = CLASSES[top_idx]
-    confidence = float(probs[top_idx])
-    
-    breakdown = {CLASSES[i]: float(probs[i]) for i in range(len(CLASSES))}
-    
-    # Confidence threshold: require at least 75% confidence to declare a sign
-    if confidence < 0.75:
-        return {
-            "prediction": "detecting",
-            "is_idle": False,
-            "confidence_percentage": round(confidence * 100, 2),
-            "avg_motion": round(avg_motion, 2),
-            "message": f"Detecting gesture... ({pred_class} {int(confidence*100)}%)",
-            "class_probabilities": breakdown
-        }
-        
-    return {
-        "prediction": pred_class,
-        "is_idle": False,
-        "confidence_percentage": round(confidence * 100, 2),
-        "avg_motion": round(avg_motion, 2),
-        "class_probabilities": breakdown
-    }
+
+    probs, _ = predict_clip(lm, sampled)
+    return _result(lm, probs, motion)
+
 
 @app.post("/api/predict")
-async def predict_gesture(file: UploadFile = File(...)):
-    net = get_model()
-    
-    # Save uploaded file to temp file
-    suffix = os.path.splitext(file.filename)[1] or ".avi"
+def predict_gesture(file: UploadFile = File(...), crop: bool = False):
+    """Classify one uploaded clip containing a single sign.
+
+    Dataset clips are already cropped, so crop defaults to False. Pass
+    ?crop=true for a full-frame recording, to crop it like the live camera.
+    """
+    lm = get_model()
+
+    suffix = Path(file.filename or '').suffix.lower()
+    suffix = suffix if suffix in VIDEO_EXTS else '.avi'
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        contents = await file.read()
-        tmp.write(contents)
         tmp_path = tmp.name
-        
+        written = 0
+        while chunk := file.file.read(1024 * 1024):
+            written += len(chunk)
+            if written > MAX_UPLOAD_BYTES:
+                break
+            tmp.write(chunk)
+
     try:
+        if written > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f'Video is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
+
         cap = cv2.VideoCapture(tmp_path)
         frames = []
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame_rgb = cv2.cvtColor(cv2.resize(frame, (112, 112)), cv2.COLOR_BGR2RGB)
-            frames.append(frame_rgb)
-        cap.release()
-        
-        if len(frames) == 0:
-            return JSONResponse(status_code=400, content={"error": "Could not read frames from uploaded video."})
-            
-        # Sample 16 frames uniformly
-        indices = np.linspace(0, len(frames) - 1, 16, dtype=int)
-        sampled = np.array(frames)[indices].astype(np.float32) / 255.0
-        
-        # Standardize
-        tensor = torch.from_numpy(sampled).permute(0, 3, 1, 2).float().unsqueeze(0).to(DEVICE)
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 1, 3, 1, 1).to(DEVICE)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 1, 3, 1, 1).to(DEVICE)
-        tensor = (tensor - mean) / std
-        
-        with torch.no_grad():
-            logits, attn = net(tensor)
-            probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
-            attn_weights = attn.squeeze().cpu().numpy().tolist()
-            
-        top_idx = int(np.argmax(probs))
-        pred_class = CLASSES[top_idx]
-        confidence = float(probs[top_idx])
-        
-        breakdown = {CLASSES[i]: float(probs[i]) for i in range(len(CLASSES))}
-        
-        return {
-            "prediction": pred_class,
-            "confidence_percentage": round(confidence * 100, 2),
-            "class_probabilities": breakdown,
-            "total_frames_in_video": len(frames),
-            "attention_weights": [round(w, 4) for w in attn_weights]
-        }
+        try:
+            while len(frames) <= MAX_VIDEO_FRAMES:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                frames.append(P.prepare_frame(frame, crop=crop))
+        finally:
+            cap.release()
+
+        if not frames:
+            raise HTTPException(status_code=400, detail='Could not read frames from the uploaded video.')
+        if len(frames) > MAX_VIDEO_FRAMES:
+            raise HTTPException(status_code=413, detail=f'Video is longer than {MAX_VIDEO_FRAMES} frames. '
+                                                        'Upload a clip containing a single sign.')
+
+        probs, attn = predict_clip(lm, sample_clip(frames, lm.num_frames))
+        return _result(lm, probs, live=False, extra={
+            'total_frames_in_video': len(frames),
+            'attention_weights': [round(float(w), 4) for w in attn],
+        })
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        os.remove(tmp_path)
+
 
 @app.get("/", response_class=HTMLResponse)
 def index_page():
-    template_path = os.path.join("app", "templates", "index.html")
-    if os.path.exists(template_path):
-        with open(template_path, "r", encoding="utf-8") as f:
-            return f.read()
+    if TEMPLATE_PATH.exists():
+        return TEMPLATE_PATH.read_text(encoding='utf-8')
     return "<h1>ISL Recognition API is running.</h1>"
