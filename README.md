@@ -5,18 +5,23 @@ An end-to-end Deep Learning system designed for real-time recognition of **India
 ---
 
 ## 📌 1. Project Overview & Motivation
-In emergency situations (accidents, acute pain, medical distress), Deaf and Hard-of-Hearing individuals face severe communication barriers when attempting to contact emergency services or communicate with first responders. 
+In emergency situations (accidents, acute pain, medical distress), Deaf and Hard-of-Hearing individuals face severe communication barriers when attempting to contact emergency services or communicate with first responders.
 
 This project bridges that gap by providing:
 - **Instant Video Gesture Recognition**: Automatically classifies dynamic ISL emergency signs from video streams.
-- **Auditory Feedback (Text-to-Speech)**: Synthesizes spoken voice alerts in real time so bystanders and healthcare professionals hear the request immediately.
-- **High Generalization**: Evaluated on completely unseen individuals with **98.0% accuracy** and **100.0% validation accuracy**, surpassing the academic benchmark threshold ($\ge 85\%$).
+- **Auditory Feedback (Text-to-Speech)**: Speaks the recognised word so bystanders and healthcare professionals hear the request immediately.
+- **Signer-Independent Evaluation**: Accuracy is measured only on people the model never saw during training (see [Section 4](#-4-evaluation-protocol--results)).
 
 ---
 
 ## 🗂️ 2. Dataset & Vocabulary
 
-The dataset comprises **260 cropped video clips** recorded at 30 FPS, covering 5 emergency and healthcare classes:
+This project uses the public dataset:
+
+> Adithya V. and Rajesh R., **"A Video Dataset of the Hand Gestures of Indian Sign Language Words used in Emergency Situations"**, Mendeley Data, V1. <https://data.mendeley.com/datasets/2vfdm42337/1> — licensed **CC BY 4.0**.
+> Paper: *Hand gestures for emergency situations: A video dataset based on words from Indian sign language*, Data in Brief, 2020. <https://pmc.ncbi.nlm.nih.gov/articles/PMC7378574/>
+
+We use the **cropped** videos of 5 of the dataset's 8 words, recorded at 30 FPS by 26 signers (2 takes each):
 
 | Class | Meaning / Context | Total Clips | Subjects | Takes per Subject |
 | :--- | :--- | :---: | :---: | :---: |
@@ -26,6 +31,8 @@ The dataset comprises **260 cropped video clips** recorded at 30 FPS, covering 5
 | **`help`** | General distress / calling for assistance | 52 | 26 | 2 |
 | **`pain`** | Reporting severe physical pain / injury | 52 | 26 | 2 |
 | **TOTAL** | **5 Dynamic ISL Emergency Words** | **260** | **26** | **2** |
+
+The other three words (`hot`, `lose`, `thief`) can be used as a **`none`** class so the model learns to say "this movement is not one of the emergency signs" instead of always picking one of the five (see `--none-from` below).
 
 ---
 
@@ -37,140 +44,132 @@ Because sign language words are **dynamic motion gestures** (movements unfolding
 Input Video Stream (Webcam or File)
                 │
                 ▼
-Uniform Sampling (16 Frames Sequence: 16 x 112 x 112 x 3)
+Gesture window (one whole sign, ~2-3 s) → 16 evenly spaced frames → 16 x 112 x 112 x 3
                 │
                 ▼
-Spatial Feature Extractor (4-Stage Residual ConvNet)
-    - Conv Block 1: 32 filters (56x56 -> 28x28)
-    - Conv Block 2: 64 filters (14x14)
-    - Conv Block 3: 128 filters (7x7)
-    - Conv Block 4: 256 filters (Adaptive AvgPool -> 256-D feature vector per frame)
+Spatial Feature Extractor (Residual ConvNet, trained from scratch)
+    - Stem: 5x5 conv, 32 filters + max-pool (112 → 28)
+    - Residual stage 1: 64 filters (14x14)
+    - Residual stage 2: 128 filters (7x7)
+    - Residual stage 3: 256 filters (4x4) → Adaptive AvgPool → 256-D feature vector per frame
                 │
                 ▼
 Temporal Sequence Modeling (2-Layer Bidirectional GRU)
     - Hidden Size: 128 (Bidirectional -> 256 output dimensions)
-    - Captures forward and reverse temporal dynamics of hand motion
                 │
                 ▼
-Temporal Self-Attention Mechanism
-    - Dynamically computes attention weights across the 16 timesteps
-    - Focuses peak attention on the stroke/impact phase of the gesture
+Temporal Self-Attention (weights the 16 timesteps)
                 │
                 ▼
-Dense Classifier Head (Dropout 0.4 -> Linear 128 -> ReLU -> Linear 5)
+Dense Classifier Head (Dropout 0.4 -> Linear 128 -> ReLU -> Dropout 0.3 -> Linear N)
                 │
                 ▼
-Predicted ISL Class + Softmax Probabilities + Real-Time Voice Synthesis
+Predicted ISL Class + Softmax Probabilities + Voice Output
 ```
+
+All code paths (data preparation, training, evaluation, desktop webcam, web API) share one preprocessing module, `src/preprocess.py`, so the model sees the same kind of input everywhere.
 
 ---
 
-## 📊 4. Experimental Results
+## 📊 4. Evaluation Protocol & Results
 
-The model was trained and evaluated under two rigorous validation protocols:
+### Why the earlier 100% was not a real result
+The first version split the 260 clips at random within each class. Every signer recorded each word **twice**, so for most validation clips the same person's other take was in the training set. The model was also selected and scored on the same 50 validation clips. Both inflate accuracy, so the earlier "100% validation / 98% unseen subjects" numbers have been withdrawn.
 
-### A. Stratified 80/20 Validation
-- **Validation Accuracy**: **100.00%**
-- **Macro Average F1-Score**: **1.0000**
-- **Training Time**: ~8 minutes on CPU (40 epochs)
+### Current protocol (signer-independent)
+- **Held-out test signers**: `src.train` holds out signers `022`–`026` by default. They are never used for training or for choosing the best epoch. `src.evaluate` scores the model on them.
+- **Validation signers**: a few other signers are used only to choose the best epoch (lowest validation loss).
+- **Cross-validation**: `src.cross_validate` runs 5-fold `GroupKFold` by signer, so every clip is scored once by a model that never saw that person. Report the **mean ± std** from this.
 
-#### Classification Report:
-```
-              precision    recall  f1-score   support
+### Results
+| Protocol | Accuracy | Macro F1 |
+| :--- | :---: | :---: |
+| 5-fold signer-independent CV (`eval_results/cross_validation.json`) | _run `python -m src.cross_validate`_ | |
+| Held-out signers 022–026 (`eval_results/summary.json`) | _run `python -m src.evaluate`_ | |
 
-    accident     1.0000    1.0000    1.0000        10
-        call     1.0000    1.0000    1.0000        10
-      doctor     1.0000    1.0000    1.0000        10
-        help     1.0000    1.0000    1.0000        10
-        pain     1.0000    1.0000    1.0000        10
-
-    accuracy                         1.0000        50
-   macro avg     1.0000    1.0000    1.0000        50
-weighted avg     1.0000    1.0000    1.0000        50
-```
-
-### B. Subject-Independent Generalization (Zero-Shot Signers)
-To prove the model generalizes to new people (and does not simply memorize clothing, lighting, or facial appearance), subjects `022`, `023`, `024`, `025`, and `026` were completely held out from training:
-- **Test Accuracy on completely unseen subjects**: **98.00%** (49 / 50 correct).
-
-Visual performance curves and the confusion matrix are stored in `eval_results/`:
-- `eval_results/confusion_matrix.png`
-- `eval_results/training_curves.png`
-- `eval_results/classification_report.txt`
+For reference, the dataset paper reports 90–100% per-class accuracy for its deep-learning baseline on all 8 words.
 
 ---
 
-## 🚀 5. How to Run the Applications
+## 🚀 5. How to Run
 
-### Prerequisites
-Make sure your virtual environment is active:
-```powershell
-.\.venv\Scripts\Activate.ps1
+### Setup
+```bash
+python -m venv .venv
+# Windows: .\.venv\Scripts\Activate.ps1      macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Option A: Run Live Webcam Application (OpenCV HUD + Audio Voice)
-Launch the real-time desktop window with webcam feed, gesture HUD overlay, confidence meters, and voice synthesis:
-```powershell
-.\.venv\Scripts\python.exe -m src.real_time_webcam --source 0
+### Step 1: Prepare the data
+Download the dataset from Mendeley and put the cropped videos under `data/raw/` (any folder layout; files are matched by name, e.g. `help_Crop_001_01.avi`). Then build the frame cache:
+```bash
+python -m src.data_prep
+# Recommended: also learn a "none" class from the three unused words
+python -m src.data_prep --none-from hot lose thief
 ```
-- **Hotkeys in window**:
-  - `Q` or `ESC`: Quit application
-  - `S`: Toggle voice speech feedback (ON / OFF)
-  - `C`: Clear recent gesture history
 
-*(Tip: You can also test with a saved video file instead of a live camera: `python -m src.real_time_webcam --source data/raw/help/help_Crop_001_01.avi`)*
-
----
-
-### Option B: Run FastAPI Web Dashboard
-Start the web server to access the browser-based dashboard and REST API:
-```powershell
-.\.venv\Scripts\uvicorn.exe app.main:app --reload --host 127.0.0.1 --port 8000
+### Step 2: Train and evaluate
+```bash
+python -m src.train              # holds out signers 022-026, saves models/best_isl_model.pth
+python -m src.evaluate           # scores the held-out signers → eval_results/
+python -m src.cross_validate     # 5-fold signer-independent CV → eval_results/cross_validation.json
 ```
-Then open your browser at:
-`http://127.0.0.1:8000`
 
-- **Interactive features**:
-  - Drag-and-drop video gesture tester
-  - Live animated confidence bars for all 5 classes
-  - REST endpoint: `POST /api/predict`
-  - System metadata endpoint: `GET /api/info`
+### Option A: Live Webcam Application (OpenCV HUD + Voice)
+```bash
+python -m src.real_time_webcam --source 0
+```
+- Sign inside the yellow box. The model looks at the last ~2-3 seconds (one whole sign), so finish the full movement.
+- **Hotkeys**: `Q`/`ESC` quit · `S` toggle speech · `C` clear history
+- Test with a dataset clip (already cropped, so no box is applied): `python -m src.real_time_webcam --source data/raw/help/help_Crop_001_01.avi`
+- Speech uses the system voice: Windows SAPI, macOS `say`, Linux `espeak-ng`.
+
+### Option B: FastAPI Web Dashboard
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+Then open `http://127.0.0.1:8000`.
+
+- Browser webcam with the same gesture window and crop as the desktop app
+- Drag-and-drop video tester
+- REST endpoints: `POST /api/predict` (one clip), `POST /api/predict-frames` (live frames), `GET /api/info`
+
+### Tests
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 ---
 
 ## 📁 6. Project Directory Structure
 
 ```
-SignLanguageProject/
+PBL-DL/
 ├── app/
-│   ├── main.py                  # FastAPI REST server & prediction router
+│   ├── main.py                  # FastAPI REST server & prediction routes
 │   └── templates/
 │       └── index.html           # Interactive HTML5/JS dashboard
-├── data/
-│   ├── raw/                     # 260 extracted ISL videos organized by class
-│   │   ├── accident/
-│   │   ├── call/
-│   │   ├── doctor/
-│   │   ├── help/
-│   │   └── pain/
+├── data/                        # not committed
+│   ├── raw/                     # dataset videos
 │   └── processed/
-│       └── cached_all_frames.pt # Preprocessed frames cache for fast loading
-├── eval_results/
-│   ├── classification_report.txt# Detailed precision/recall/F1 metrics
-│   ├── confusion_matrix.png     # Visual confusion matrix plot
-│   ├── history.json             # Epoch-by-epoch loss & accuracy log
-│   ├── summary.json             # Benchmark summary metadata
-│   └── training_curves.png      # Loss and accuracy vs epoch plot
+│       └── cached_all_frames.pt # frame cache built by src.data_prep
+├── eval_results/                # written by src.evaluate and src.cross_validate
 ├── models/
-│   └── best_isl_model.pth       # Trained PyTorch model weights & hyperparameters
+│   └── best_isl_model.pth       # trained weights + config + signer split
 ├── src/
-│   ├── __init__.py
-│   ├── dataset.py               # Custom PyTorch Dataset with temporal sampling & spatial jitter
-│   ├── evaluate.py              # Evaluation script generating plots and reports
-│   ├── model.py                 # PyTorch Spatio-Temporal Residual CNN + BiGRU + Attention
-│   ├── real_time_webcam.py      # Real-time OpenCV runner with HUD overlay & speech
-│   ├── train.py                 # End-to-end training loop with Cosine Annealing LR
-│   └── tts_helper.py            # Non-blocking Windows SAPI Text-to-Speech engine
+│   ├── preprocess.py            # shared frame preparation, sampling, normalisation, crop box
+│   ├── data_prep.py             # builds the frame cache from raw videos
+│   ├── dataset.py               # PyTorch Dataset, signer-based splitting
+│   ├── model.py                 # Spatio-Temporal Residual CNN + BiGRU + Attention
+│   ├── engine.py                # training / prediction loops
+│   ├── train.py                 # training with held-out test signers
+│   ├── evaluate.py              # held-out signer evaluation, plots and reports
+│   ├── cross_validate.py        # k-fold signer-independent cross-validation
+│   ├── inference.py             # model loading, gesture window for live input
+│   ├── real_time_webcam.py      # OpenCV desktop app with HUD & speech
+│   └── tts_helper.py            # cross-platform non-blocking text-to-speech
+├── tests/
 ├── requirements.txt
 └── README.md
 ```
@@ -184,17 +183,21 @@ SignLanguageProject/
 **Q1: Why did you choose a Spatio-Temporal model (CNN + BiGRU) instead of a simple 2D CNN?**
 > **Answer**: ISL emergency words like *accident*, *call*, *doctor*, *help*, and *pain* are dynamic movements that take 2 to 4 seconds to perform. A 2D CNN only classifies a single still frame, ignoring the direction, speed, and trajectory of hand movement. Our architecture uses a 2D Residual CNN to extract spatial hand/body features from 16 sampled frames, and a 2-layer Bidirectional GRU with Temporal Attention to model the chronological sequence of the gesture.
 
-**Q2: How did you ensure your model does not overfit on 260 video samples?**
-> **Answer**: We implemented four regularization and generalization techniques:
-> 1. **Temporal Jitter**: Random temporal segment sampling during training so the network sees varied phase alignments.
+**Q2: How did you reduce overfitting on 260 video samples?**
+> **Answer**:
+> 1. **Temporal Jitter**: Random frame sampling within 16 segments during training, so the network sees varied phase alignments.
 > 2. **Spatial Augmentation**: Random small translations, brightness jitter, and contrast scaling.
 > 3. **Regularization**: Dropout (0.3 in GRU, 0.4 and 0.3 in classifier head), Weight Decay ($10^{-3}$ in AdamW), and Label Smoothing ($0.05$).
-> 4. **Subject-Independent Cross-Validation**: Testing on unseen individuals, achieving 98.0% accuracy.
+> 4. **Honest measurement**: We check overfitting with signer-independent cross-validation, scoring only people the model never trained on.
 
 **Q3: Why use GRU instead of LSTM or 3D CNN?**
-> **Answer**: GRU has fewer parameters than standard LSTM (3 gates vs 4), training faster and reducing overfitting on medium-sized sequence datasets. Furthermore, full 3D CNNs (e.g. C3D, SlowFast) have massive computational overhead and struggle to run smoothly in real time on CPU. MobileNet/Residual CNN + BiGRU provides real-time 30 FPS inference on CPU without needing a dedicated GPU.
+> **Answer**: GRU has fewer parameters than standard LSTM (3 gates vs 4), training faster and reducing overfitting on small sequence datasets. Full 3D CNNs (e.g. C3D, SlowFast) are much heavier and harder to run in real time on a CPU. Inference time per window is printed by `src.real_time_webcam`.
 
 **Q4: How does the real-time webcam inference pipeline work?**
-> **Answer**: The webcam captures live frames into a sliding queue (FIFO buffer) of 16 frames. Once 16 frames are accumulated, the tensor is preprocessed (resized to $112 \times 112$ and standardized) and passed through the neural network every 2-3 frames. An Exponential Moving Average filter smooths probability spikes, and when a gesture maintains $\ge 85\%$ confidence for consecutive frames, the HUD turns green and the voice synthesizer speaks the word.
-#   P B L - D L  
- 
+> **Answer**: Each camera frame is cropped to a centred box (to match the dataset's cropped clips), resized to $112 \times 112$, and added to a rolling window as long as a typical training clip (about 2-3 seconds). Every 2 frames, 16 frames spread evenly across that window are normalised and passed to the network, exactly like the training clips. A motion check skips idle input, an Exponential Moving Average smooths the probabilities, and when a gesture stays above 85% confidence for 3 consecutive predictions, the HUD turns green and the word is spoken.
+
+**Q5: Why split the data by signer instead of at random?**
+> **Answer**: Each person signed every word twice. With a random split, one take ends up in training and the other in testing, so the model can recognise the person rather than the sign. Splitting by signer measures what matters in practice: how well the system works for someone new.
+
+**Q6: Why feed a 2-3 second window instead of the latest 16 frames?**
+> **Answer**: During training, 16 frames are spread across a whole 2-4 second clip. Sixteen consecutive webcam frames cover only about half a second, which is a different input from anything the model was trained on. Using a gesture-length window keeps live input consistent with training.

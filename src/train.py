@@ -1,137 +1,100 @@
-import os
-import time
+"""Train the model with a signer-independent split.
+
+Signers are split into three disjoint groups:
+  test  - never seen during training or model selection (default 022-026)
+  val   - used only to pick the best epoch
+  train - everything else
+
+Usage:
+    python -m src.train
+    python -m src.train --test-subjects 001 002 003 004 005 --epochs 40
+"""
+import argparse
 import json
+import os
+
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-import numpy as np
 
-from src.dataset import ISLVideoDataset, create_splits, CLASSES
-from src.model import ISLGestureRecognizer
+from src.dataset import DEFAULT_CACHE, all_subjects, choose_val_subjects, clip_seconds, load_cache, split_by_subject
+from src.engine import DEFAULT_HPARAMS, get_device, train_model
 
-def train_epoch(model, dataloader, criterion, optimizer, device):
-    model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    for batch_idx, (frames, labels, _) in enumerate(dataloader):
-        frames = frames.to(device) # (B, T, C, H, W)
-        labels = labels.to(device) # (B,)
-        
-        optimizer.zero_grad()
-        logits, _ = model(frames)
-        loss = criterion(logits, labels)
-        loss.backward()
-        
-        # Gradient clipping to stabilize recurrent layers
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
-        optimizer.step()
-        
-        running_loss += loss.item() * frames.size(0)
-        preds = torch.argmax(logits, dim=1)
-        correct += torch.sum(preds == labels).item()
-        total += labels.size(0)
-        
-    epoch_loss = running_loss / total
-    epoch_acc = (correct / total) * 100.0
-    return epoch_loss, epoch_acc
+DEFAULT_TEST_SUBJECTS = ['022', '023', '024', '025', '026']
 
 
-def validate(model, dataloader, criterion, device):
-    model.eval()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    with torch.no_grad():
-        for frames, labels, _ in dataloader:
-            frames = frames.to(device)
-            labels = labels.to(device)
-            
-            logits, _ = model(frames)
-            loss = criterion(logits, labels)
-            
-            running_loss += loss.item() * frames.size(0)
-            preds = torch.argmax(logits, dim=1)
-            correct += torch.sum(preds == labels).item()
-            total += labels.size(0)
-            
-    val_loss = running_loss / total if total > 0 else 0.0
-    val_acc = (correct / total) * 100.0 if total > 0 else 0.0
-    return val_loss, val_acc
+def add_hparam_args(parser):
+    parser.add_argument('--epochs', type=int, default=DEFAULT_HPARAMS['epochs'])
+    parser.add_argument('--batch-size', type=int, default=DEFAULT_HPARAMS['batch_size'])
+    parser.add_argument('--lr', type=float, default=DEFAULT_HPARAMS['lr'])
+    parser.add_argument('--weight-decay', type=float, default=DEFAULT_HPARAMS['weight_decay'])
+    parser.add_argument('--seed', type=int, default=42)
+
+
+def hparams_from_args(args):
+    hp = dict(DEFAULT_HPARAMS)
+    hp.update(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, weight_decay=args.weight_decay)
+    return hp
+
+
+def save_checkpoint(path, state_dict, classes, hp, best, split, window_seconds, seed):
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    torch.save({
+        'model_state_dict': state_dict,
+        'classes': list(classes),
+        'num_frames': hp['num_frames'],
+        'feature_dim': hp['feature_dim'],
+        'hidden_dim': hp['hidden_dim'],
+        'window_seconds': float(window_seconds),
+        'epoch': best['epoch'],
+        'val_acc': float(best['val_acc']),
+        'val_loss': float(best['val_loss']),
+        'selection_metric': 'val_loss',
+        'split': {k: list(v) for k, v in split.items()},
+        'hparams': hp,
+        'seed': seed,
+    }, path)
 
 
 def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    parser = argparse.ArgumentParser(description='Train the ISL gesture recogniser.')
+    parser.add_argument('--cache', default=DEFAULT_CACHE)
+    parser.add_argument('--out', default=os.path.join('models', 'best_isl_model.pth'))
+    parser.add_argument('--history', default=os.path.join('eval_results', 'history.json'))
+    parser.add_argument('--test-subjects', nargs='+', default=DEFAULT_TEST_SUBJECTS,
+                        help='Signers held out for the final test. Never used for training or model selection.')
+    parser.add_argument('--n-val-subjects', type=int, default=4,
+                        help='Number of remaining signers used to choose the best epoch.')
+    add_hparam_args(parser)
+    args = parser.parse_args()
+
+    device = get_device()
     print(f'Training on device: {device}')
-    
-    # 1. Prepare datasets
-    train_samples, val_samples = create_splits(val_ratio=0.2, seed=42)
-    train_dataset = ISLVideoDataset(train_samples, num_frames=16, is_train=True)
-    val_dataset = ISLVideoDataset(val_samples, num_frames=16, is_train=False)
-    
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=0)
-    
-    # 2. Initialize Model
-    model = ISLGestureRecognizer(
-        num_classes=len(CLASSES),
-        num_frames=16,
-        in_channels=3,
-        feature_dim=256,
-        hidden_dim=128
-    ).to(device)
-    
-    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f'Model initialized. Trainable parameters: {total_params:,}')
-    
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-3)
-    epochs = 40
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
-    
-    best_val_acc = 0.0
-    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
-    
-    os.makedirs('models', exist_ok=True)
-    os.makedirs('eval_results', exist_ok=True)
-    
-    print('Starting training loop...')
-    for epoch in range(1, epochs + 1):
-        t0 = time.time()
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc = validate(model, val_loader, criterion, device)
-        scheduler.step()
-        
-        history['train_loss'].append(train_loss)
-        history['train_acc'].append(train_acc)
-        history['val_loss'].append(val_loss)
-        history['val_acc'].append(val_acc)
-        
-        epoch_time = time.time() - t0
-        print(f'Epoch [{epoch:02d}/{epochs:02d}] ({epoch_time:.1f}s) - '
-              f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.1f}% | '
-              f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.1f}%')
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            save_path = os.path.join('models', 'best_isl_model.pth')
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_acc': val_acc,
-                'classes': CLASSES,
-                'num_frames': 16,
-                'feature_dim': 256,
-                'hidden_dim': 128
-            }, save_path)
-            print(f'  --> Best model saved! (Val Acc: {val_acc:.1f}%)')
-            
-    with open('eval_results/history.json', 'w') as f:
+
+    samples, classes, _ = load_cache(args.cache)
+    subjects = all_subjects(samples)
+    remaining = [s for s in subjects if s not in set(args.test_subjects)]
+    val_subjects = choose_val_subjects(remaining, args.n_val_subjects, args.seed)
+    train_samples, val_samples, test_samples = split_by_subject(samples, args.test_subjects, val_subjects)
+    train_subjects = sorted(set(remaining) - set(val_subjects))
+
+    print(f'Classes: {classes}')
+    print(f'Train: {len(train_samples)} clips / {len(train_subjects)} signers')
+    print(f'Val:   {len(val_samples)} clips / signers {val_subjects}')
+    print(f'Test:  {len(test_samples)} clips / signers {sorted(args.test_subjects)} (held out)')
+
+    hp = hparams_from_args(args)
+    best_state, history, best = train_model(train_samples, val_samples, len(classes), hp, device, seed=args.seed)
+
+    split = {'train_subjects': train_subjects, 'val_subjects': val_subjects,
+             'test_subjects': sorted(args.test_subjects)}
+    save_checkpoint(args.out, best_state, classes, hp, best, split, clip_seconds(train_samples), args.seed)
+
+    os.makedirs(os.path.dirname(args.history) or '.', exist_ok=True)
+    with open(args.history, 'w') as f:
         json.dump(history, f, indent=2)
-    print(f'Training complete. Best Validation Accuracy: {best_val_acc:.1f}%')
+
+    print(f'Saved {args.out} (epoch {best["epoch"]}, val loss {best["val_loss"]:.4f}, val acc {best["val_acc"]:.1f}%)')
+    print('Next: python -m src.evaluate   (scores the held-out test signers)')
+
 
 if __name__ == '__main__':
     main()

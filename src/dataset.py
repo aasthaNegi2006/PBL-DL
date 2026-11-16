@@ -1,18 +1,110 @@
-import torch
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
-import random
 import os
+import pickle
+import random
+import re
+
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+
+from src import preprocess as P
 
 CLASSES = ['accident', 'call', 'doctor', 'help', 'pain']
-CLASS_TO_IDX = {c: i for i, c in enumerate(CLASSES)}
+NONE_CLASS = 'none'
+
+# Dataset filenames end in <subject>_<take>, e.g. help_Crop_001_01.avi -> subject 001, take 01.
+_SUBJECT_TAKE_RE = re.compile(r'(\d{3})_(\d{2})$')
+
+DEFAULT_CACHE = os.path.join('data', 'processed', 'cached_all_frames.pt')
+
+
+def parse_subject_take(video_name):
+    stem = os.path.splitext(os.path.basename(video_name))[0]
+    match = _SUBJECT_TAKE_RE.search(stem)
+    if not match:
+        raise ValueError(f'Cannot read subject/take from video name "{video_name}" '
+                         '(expected it to end in _<3-digit subject>_<2-digit take>)')
+    return match.group(1), match.group(2)
+
+
+def subject_of(sample):
+    return sample.get('subject') or parse_subject_take(sample['video_name'])[0]
+
+
+def load_cache(path=DEFAULT_CACHE):
+    """Load the frame cache built by src.data_prep. Returns (samples, classes, meta)."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f'Frame cache not found at {path}. Build it with: python -m src.data_prep')
+    try:
+        data = torch.load(path, weights_only=True)
+    except pickle.UnpicklingError:
+        # Caches made by the original project stored numpy arrays, which need the
+        # full unpickler. Only do this for a cache you built yourself.
+        print(f'Note: {path} uses the old cache format. Rebuild it with python -m src.data_prep.')
+        data = torch.load(path, weights_only=False)
+    samples = data['samples']
+    classes = list(data.get('classes', CLASSES))
+    for s in samples:
+        s.setdefault('subject', subject_of(s))
+        s.setdefault('fps', P.DEFAULT_FPS)
+    return samples, classes, data.get('meta', {})
+
+
+def clip_seconds(samples):
+    """Median clip length in seconds; the live window uses this so it matches training."""
+    durations = [s['total_frames'] / float(s.get('fps') or P.DEFAULT_FPS) for s in samples]
+    return float(np.median(durations)) if durations else P.DEFAULT_WINDOW_SECONDS
+
+
+def all_subjects(samples):
+    return sorted({subject_of(s) for s in samples})
+
+
+def choose_val_subjects(candidates, n_val, seed):
+    rng = random.Random(seed)
+    candidates = sorted(candidates)
+    return sorted(rng.sample(candidates, n_val))
+
+
+def split_by_subject(samples, test_subjects, val_subjects):
+    """Split samples so that each signer appears in exactly one of train / val / test.
+
+    Every signer recorded each word twice. Splitting clips at random (as the
+    original code did) puts a signer's second take in training while the first
+    is used for validation, which inflates accuracy.
+    """
+    test_subjects, val_subjects = set(test_subjects), set(val_subjects)
+    overlap = test_subjects & val_subjects
+    if overlap:
+        raise ValueError(f'Subjects in both val and test: {sorted(overlap)}')
+    known = set(all_subjects(samples))
+    missing = (test_subjects | val_subjects) - known
+    if missing:
+        raise ValueError(f'Unknown subjects {sorted(missing)}; available: {sorted(known)}')
+
+    train, val, test = [], [], []
+    for s in samples:
+        subj = subject_of(s)
+        if subj in test_subjects:
+            test.append(s)
+        elif subj in val_subjects:
+            val.append(s)
+        else:
+            train.append(s)
+    return train, val, test
+
+
+def samples_for_subjects(samples, subjects):
+    subjects = set(subjects)
+    return [s for s in samples if subject_of(s) in subjects]
+
 
 class ISLVideoDataset(Dataset):
-    def __init__(self, samples, num_frames=16, is_train=True):
+    def __init__(self, samples, num_frames=P.NUM_FRAMES, is_train=True):
         """
-        samples: list of sample dicts from cached_all_frames.pt
-        num_frames: number of frames to sample per sequence (e.g. 16)
-        is_train: apply augmentations if True
+        samples: list of sample dicts from the frame cache
+        num_frames: number of frames to sample per sequence
+        is_train: random temporal jitter and spatial augmentation if True
         """
         self.samples = samples
         self.num_frames = num_frames
@@ -22,104 +114,45 @@ class ISLVideoDataset(Dataset):
         return len(self.samples)
 
     def _sample_frame_indices(self, total_frames):
-        if total_frames <= self.num_frames:
-            return np.linspace(0, total_frames - 1, self.num_frames, dtype=int)
-        
         if self.is_train:
-            # Random temporal jitter: divide into num_frames segments and pick one frame randomly in each
-            segment_len = total_frames / float(self.num_frames)
-            indices = []
-            for i in range(self.num_frames):
-                start = int(i * segment_len)
-                end = int((i + 1) * segment_len)
-                if end <= start:
-                    idx = start
-                else:
-                    idx = random.randint(start, end - 1)
-                indices.append(idx)
-            return np.array(indices, dtype=int)
-        else:
-            # Deterministic uniform sampling
-            return np.linspace(0, total_frames - 1, self.num_frames, dtype=int)
+            return P.jitter_indices(total_frames, self.num_frames)
+        return P.uniform_indices(total_frames, self.num_frames)
 
     def _apply_spatial_augment(self, frames):
         # frames: (T, H, W, C) float32 in [0, 1]
         T, H, W, C = frames.shape
-        
+
         # 1. Random brightness jitter
-        brightness_factor = random.uniform(0.85, 1.15)
-        frames = frames * brightness_factor
-        
+        frames = frames * random.uniform(0.85, 1.15)
+
         # 2. Random contrast jitter
         contrast_factor = random.uniform(0.85, 1.15)
         mean = np.mean(frames)
         frames = (frames - mean) * contrast_factor + mean
-        
-        # 3. Random small translation / crop (shift by up to 6 pixels)
+
+        # 3. Random small translation (shift by up to 6 pixels)
         dx = random.randint(-6, 6)
         dy = random.randint(-6, 6)
-        
         shifted = np.zeros_like(frames)
-        src_x_start = max(0, -dx)
-        src_x_end = min(W, W - dx)
-        dst_x_start = max(0, dx)
-        dst_x_end = min(W, W + dx)
-        
-        src_y_start = max(0, -dy)
-        src_y_end = min(H, H - dy)
-        dst_y_start = max(0, dy)
-        dst_y_end = min(H, H + dy)
-        
+        src_x_start, src_x_end = max(0, -dx), min(W, W - dx)
+        dst_x_start, dst_x_end = max(0, dx), min(W, W + dx)
+        src_y_start, src_y_end = max(0, -dy), min(H, H - dy)
+        dst_y_start, dst_y_end = max(0, dy), min(H, H + dy)
         shifted[:, dst_y_start:dst_y_end, dst_x_start:dst_x_end, :] = \
             frames[:, src_y_start:src_y_end, src_x_start:src_x_end, :]
-            
+
         return np.clip(shifted, 0.0, 1.0)
 
     def __getitem__(self, idx):
         item = self.samples[idx]
-        raw_frames = item['frames'] # uint8 array (N, 112, 112, 3)
-        total_frames = item['total_frames']
-        label = item['label']
-        
-        # 1. Sample frame indices
-        indices = self._sample_frame_indices(total_frames)
-        sampled = raw_frames[indices].astype(np.float32) / 255.0 # (T, 112, 112, 3)
-        
-        # 2. Augment if train
+        raw_frames = item['frames']  # uint8 (N, 112, 112, 3), numpy array or torch tensor
+        if torch.is_tensor(raw_frames):
+            raw_frames = raw_frames.numpy()
+
+        indices = self._sample_frame_indices(item['total_frames'])
+        sampled = raw_frames[indices]
+
         if self.is_train:
-            sampled = self._apply_spatial_augment(sampled)
-            
-        # 3. Transpose to (T, C, H, W)
-        tensor_frames = torch.from_numpy(sampled).permute(0, 3, 1, 2).float()
-        
-        # Standardize using ImageNet statistics
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-        tensor_frames = (tensor_frames - mean) / std
-        
-        return tensor_frames, label, item['video_name']
+            sampled = self._apply_spatial_augment(sampled.astype(np.float32) / 255.0)
 
-
-def create_splits(cached_path='data/processed/cached_all_frames.pt', val_ratio=0.2, seed=42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    
-    data = torch.load(cached_path, weights_only=False)
-    samples = data['samples']
-    
-    by_class = {c: [] for c in CLASSES}
-    for s in samples:
-        by_class[s['class_name']].append(s)
-        
-    train_samples = []
-    val_samples = []
-    
-    for cls, items in by_class.items():
-        random.shuffle(items)
-        n_val = int(len(items) * val_ratio) # 10 val per class out of 52 = 50 val, 210 train
-        val_samples.extend(items[:n_val])
-        train_samples.extend(items[n_val:])
-        
-    print(f'Total samples: {len(samples)} | Train: {len(train_samples)} | Val: {len(val_samples)}')
-    return train_samples, val_samples
+        return P.to_model_tensor(sampled), item['label'], item['video_name']
