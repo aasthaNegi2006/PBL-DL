@@ -196,3 +196,5 @@ SignLanguageProject/
 
 **Q4: How does the real-time webcam inference pipeline work?**
 > **Answer**: The webcam captures live frames into a sliding queue (FIFO buffer) of 16 frames. Once 16 frames are accumulated, the tensor is preprocessed (resized to $112 \times 112$ and standardized) and passed through the neural network every 2-3 frames. An Exponential Moving Average filter smooths probability spikes, and when a gesture maintains $\ge 85\%$ confidence for consecutive frames, the HUD turns green and the voice synthesizer speaks the word.
+#   P B L - D L  
+ 
