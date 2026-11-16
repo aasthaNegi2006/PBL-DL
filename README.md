@@ -192,28 +192,3 @@ PBL-DL/
 
 ---
 
-## 🎓 7. UPES Internals / Viva Voce Preparation Guide
-
-### Frequently Asked Questions & Model Answers:
-
-**Q1: Why did you choose a Spatio-Temporal model (CNN + BiGRU) instead of a simple 2D CNN?**
-> **Answer**: ISL emergency words like *accident*, *call*, *doctor*, *help*, and *pain* are dynamic movements that take 2 to 4 seconds to perform. A 2D CNN only classifies a single still frame, ignoring the direction, speed, and trajectory of hand movement. Our architecture uses a 2D Residual CNN to extract spatial hand/body features from 16 sampled frames, and a 2-layer Bidirectional GRU with Temporal Attention to model the chronological sequence of the gesture.
-
-**Q2: How did you reduce overfitting on 260 video samples?**
-> **Answer**:
-> 1. **Temporal Jitter**: Random frame sampling within 16 segments during training, so the network sees varied phase alignments.
-> 2. **Spatial Augmentation**: Random small translations, brightness jitter, and contrast scaling.
-> 3. **Regularization**: Dropout (0.3 in GRU, 0.4 and 0.3 in classifier head), Weight Decay ($10^{-3}$ in AdamW), and Label Smoothing ($0.05$).
-> 4. **Honest measurement**: We check overfitting with signer-independent cross-validation, scoring only people the model never trained on.
-
-**Q3: Why use GRU instead of LSTM or 3D CNN?**
-> **Answer**: GRU has fewer parameters than standard LSTM (3 gates vs 4), training faster and reducing overfitting on small sequence datasets. Full 3D CNNs (e.g. C3D, SlowFast) are much heavier and harder to run in real time on a CPU. Inference time per window is printed by `src.real_time_webcam`.
-
-**Q4: How does the real-time webcam inference pipeline work?**
-> **Answer**: Each camera frame is cropped to a centred box (to match the dataset's cropped clips), resized to $112 \times 112$, and added to a rolling window as long as a typical training clip (about 2-3 seconds). Every 2 frames, 16 frames spread evenly across that window are normalised and passed to the network, exactly like the training clips. A motion check skips idle input, an Exponential Moving Average smooths the probabilities, and when a gesture stays above 85% confidence for 3 consecutive predictions, the HUD turns green and the word is spoken.
-
-**Q5: Why split the data by signer instead of at random?**
-> **Answer**: Each person signed every word twice. With a random split, one take ends up in training and the other in testing, so the model can recognise the person rather than the sign. Splitting by signer measures what matters in practice: how well the system works for someone new.
-
-**Q6: Why feed a 2-3 second window instead of the latest 16 frames?**
-> **Answer**: During training, 16 frames are spread across a whole 2-4 second clip. Sixteen consecutive webcam frames cover only about half a second, which is a different input from anything the model was trained on. Using a gesture-length window keeps live input consistent with training.
