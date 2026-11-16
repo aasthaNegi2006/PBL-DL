@@ -1,0 +1,16 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch checkpoints / large raw cached frames (weights can be committed if desired)
+data/processed/cached_all_frames.pt
+
+# System / OS
+.DS_Store
+Thumbs.db

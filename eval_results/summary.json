@@ -1,0 +1,15 @@
+{
+  "model": "Spatio-Temporal CNN + BiGRU + Temporal Attention",
+  "classes": [
+    "accident",
+    "call",
+    "doctor",
+    "help",
+    "pain"
+  ],
+  "val_accuracy_percent": 100.0,
+  "macro_avg_f1": 1.0,
+  "total_val_samples": 50,
+  "target_accuracy_threshold": 85.0,
+  "threshold_satisfied": true
+}
