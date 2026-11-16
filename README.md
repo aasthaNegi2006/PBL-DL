@@ -89,6 +89,15 @@ The first version split the 260 clips at random within each class. Every signer 
 
 For reference, the dataset paper reports 90–100% per-class accuracy for its deep-learning baseline on all 8 words.
 
+### To do: produce the results
+The code has only been tested end to end on synthetic videos, so the table above is still empty. With the dataset downloaded:
+
+- [ ] Download the dataset and build the frame cache ([Step 1](#step-1-download-the-dataset-and-build-the-frame-cache))
+- [ ] `python -m src.train` then `python -m src.evaluate` → copy `accuracy_percent` and `macro_avg_f1` from `eval_results/summary.json` into the table
+- [ ] `python -m src.cross_validate` (about 40 minutes on a CPU) → copy `accuracy_mean ± accuracy_std` and `macro_f1_mean ± macro_f1_std` from `eval_results/cross_validation.json`
+- [ ] Try the live demo (`python -m src.real_time_webcam --source 0`). If real signs are reported as idle, lower `--motion-threshold` (default 2.5)
+- [ ] Commit the new `eval_results/` files so the dashboard shows the real numbers, and add the trained model to `models/` (about 8 MB)
+
 ---
 
 ## 🚀 5. How to Run
@@ -100,13 +109,20 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### Step 1: Prepare the data
-Download the dataset from Mendeley and put the cropped videos under `data/raw/` (any folder layout; files are matched by name, e.g. `help_Crop_001_01.avi`). Then build the frame cache:
+### Step 1: Download the dataset and build the frame cache
+The videos are not stored in this repository.
+
+1. Open <https://data.mendeley.com/datasets/2vfdm42337/1> and click **Download All** (about 3.14 GB).
+2. Unzip it and copy the **cropped** video folders into `data/raw/`. The folder layout does not matter: files are found by name (`<word>_crop_<signer>_<take>`, any capitalisation, e.g. `help_Crop_001_01.avi`). The uncropped "Raw" videos are not needed.
+   - Needed: `accident`, `call`, `doctor`, `help`, `pain`
+   - Also copy `hot`, `lose`, `thief` if you want the "none" class (recommended)
+3. Build the frame cache:
 ```bash
-python -m src.data_prep
-# Recommended: also learn a "none" class from the three unused words
 python -m src.data_prep --none-from hot lose thief
+# or, without the "none" class:
+python -m src.data_prep
 ```
+It prints the number of clips per class (52 each; 50 for `lose` and `thief`) and the clip lengths. If it finds no videos, check the file names.
 
 ### Step 2: Train and evaluate
 ```bash
