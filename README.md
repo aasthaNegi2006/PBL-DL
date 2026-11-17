@@ -1,5 +1,7 @@
 # Indian Sign Language (ISL) Emergency Gesture Recognition System
 
+[![Tests](https://github.com/aasthaNegi2006/PBL-DL/actions/workflows/tests.yml/badge.svg)](https://github.com/aasthaNegi2006/PBL-DL/actions/workflows/tests.yml)
+
 An end-to-end Deep Learning system designed for real-time recognition of **Indian Sign Language (ISL)** emergency gestures from live webcam video streams, built using **PyTorch**, **OpenCV**, and **FastAPI**.
 
 ---
@@ -155,6 +157,7 @@ Then open `http://127.0.0.1:8000`.
 pip install -r requirements-dev.txt
 pytest
 ```
+GitHub Actions runs the same tests on Python 3.10 and 3.13 for every pull request and every push to `main` (`.github/workflows/tests.yml`). The tests use synthetic videos, so they do not need the dataset or a trained model.
 
 ---
 
@@ -162,6 +165,8 @@ pytest
 
 ```
 PBL-DL/
+├── .github/workflows/
+│   └── tests.yml                # CI: runs pytest on every PR
 ├── app/
 │   ├── main.py                  # FastAPI REST server & prediction routes
 │   └── templates/
