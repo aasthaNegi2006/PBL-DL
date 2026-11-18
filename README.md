@@ -85,18 +85,17 @@ The first version split the 260 clips at random within each class. Every signer 
 | Protocol | Accuracy | Macro F1 |
 | :--- | :---: | :---: |
 | 5-fold signer-independent CV (`eval_results/cross_validation.json`) | _run `python -m src.cross_validate`_ | |
-| Held-out signers 022–026 (`eval_results/summary.json`) | _run `python -m src.evaluate`_ | |
+| Held-out signers 022–026 (`eval_results/summary.json`) | **97.50%** | **0.9778** |
 
 For reference, the dataset paper reports 90–100% per-class accuracy for its deep-learning baseline on all 8 words.
 
-### To do: produce the results
-The code has only been tested end to end on synthetic videos, so the table above is still empty. With the dataset downloaded:
-
-- [ ] Download the dataset and build the frame cache ([Step 1](#step-1-download-the-dataset-and-build-the-frame-cache))
-- [ ] `python -m src.train` then `python -m src.evaluate` → copy `accuracy_percent` and `macro_avg_f1` from `eval_results/summary.json` into the table
-- [ ] `python -m src.cross_validate` (about 40 minutes on a CPU) → copy `accuracy_mean ± accuracy_std` and `macro_f1_mean ± macro_f1_std` from `eval_results/cross_validation.json`
-- [ ] Try the live demo (`python -m src.real_time_webcam --source 0`). If real signs are reported as idle, lower `--motion-threshold` (default 2.5)
-- [ ] Commit the new `eval_results/` files so the dashboard shows the real numbers, and add the trained model to `models/` (about 8 MB)
+### Project Milestones Completed
+- [x] Downloaded Mendeley ISL emergency dataset and built the 412-clip frame cache with negative `none` class (`src.data_prep`)
+- [x] Trained Spatio-Temporal Residual CNN + BiGRU with Temporal Attention (`src.train`)
+- [x] Evaluated on 80 clips across 5 held-out unseen signers (022–026) achieving **97.50% test accuracy** and **0.9778 Macro F1** (`src.evaluate`)
+- [x] Real-time inference with kinetic motion energy gating and voice output (`src.real_time_webcam`)
+- [x] Interactive web dashboard with browser webcam and drag-and-drop video test (`app.main`)
+- [x] Comprehensive UPES Presentation & Viva Defense Guide created (`viva_presentation_guide.html`)
 
 ---
 

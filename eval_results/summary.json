@@ -1,0 +1,58 @@
+{
+  "model": "Spatio-Temporal CNN + BiGRU + Temporal Attention",
+  "protocol": "signer-independent: test signers never used for training or model selection",
+  "classes": [
+    "accident",
+    "call",
+    "doctor",
+    "help",
+    "pain",
+    "none"
+  ],
+  "split": "test",
+  "eval_subjects": [
+    "022",
+    "023",
+    "024",
+    "025",
+    "026"
+  ],
+  "train_subjects": [
+    "002",
+    "003",
+    "005",
+    "006",
+    "007",
+    "008",
+    "010",
+    "011",
+    "012",
+    "013",
+    "014",
+    "015",
+    "016",
+    "017",
+    "018",
+    "019",
+    "020"
+  ],
+  "val_subjects": [
+    "001",
+    "004",
+    "009",
+    "021"
+  ],
+  "accuracy_percent": 97.5,
+  "macro_avg_f1": 0.9778,
+  "per_subject_accuracy": {
+    "022": 100.0,
+    "023": 100.0,
+    "024": 87.5,
+    "025": 100.0,
+    "026": 100.0
+  },
+  "total_samples": 80,
+  "selected_epoch": 34,
+  "target_accuracy_threshold": 85.0,
+  "threshold_satisfied": true
+}

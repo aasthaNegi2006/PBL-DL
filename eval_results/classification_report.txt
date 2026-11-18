@@ -1,0 +1,16 @@
+================ ISL RECOGNITION REPORT (TEST SIGNERS 022, 023, 024, 025, 026) ================
+              precision    recall  f1-score   support
+
+    accident     1.0000    1.0000    1.0000        10
+        call     0.9000    0.9000    0.9000        10
+      doctor     1.0000    1.0000    1.0000        10
+        help     1.0000    1.0000    1.0000        10
+        pain     1.0000    1.0000    1.0000        10
+        none     0.9667    0.9667    0.9667        30
+
+    accuracy                         0.9750        80
+   macro avg     0.9778    0.9778    0.9778        80
+weighted avg     0.9750    0.9750    0.9750        80
+
+Total Evaluation Samples: 80
+Overall Accuracy: 97.50%

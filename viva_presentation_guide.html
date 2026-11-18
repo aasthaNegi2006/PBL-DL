@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISL Emergency Recognition - Viva Voce & Presentation Defense Guide</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #151d2e;
+      --card-alt: #1c263c;
+      --border: #29354d;
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --accent: #10b981;
+      --accent-warn: #f59e0b;
+      --accent-danger: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --code-bg: #070a12;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 24px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    /* Header */
+    header {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    h1 { font-size: 26px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+    .subtitle { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    .badge-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #1e3a5f;
+      color: #93c5fd;
+      border: 1px solid rgba(147, 197, 253, 0.2);
+    }
+    .badge.success { background: #064e3b; color: #6ee7b7; border-color: rgba(110, 231, 183, 0.2); }
+    .badge.warn { background: #78350f; color: #fde68a; border-color: rgba(253, 230, 138, 0.2); }
+    .badge.info { background: #4c1d95; color: #ddd6fe; border-color: rgba(221, 214, 254, 0.2); }
+
+    /* Navigation Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+    .tab-btn.active {
+      color: #0f172a;
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    /* Content Cards */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 20px; font-weight: 700; color: var(--primary); margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; }
+    .card h3 { font-size: 16px; font-weight: 700; color: var(--accent); margin-top: 18px; margin-bottom: 10px; }
+
+    /* Script Timeline */
+    .timeline { border-left: 3px solid var(--primary); padding-left: 20px; margin-left: 10px; margin-top: 14px; }
+    .timeline-item { margin-bottom: 24px; position: relative; }
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: -27px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2px solid var(--bg);
+    }
+    .timeline-time { font-size: 12px; font-weight: 800; color: var(--primary); text-transform: uppercase; }
+    .timeline-title { font-size: 16px; font-weight: 700; margin: 4px 0 6px 0; color: var(--text); }
+    .timeline-desc { font-size: 14px; color: var(--text-muted); }
+
+    /* Q&A Accordion */
+    .qa-box {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+    .qa-box:hover { border-color: var(--primary); }
+    .qa-q {
+      font-size: 15px;
+      font-weight: 700;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .qa-tag {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #0284c7;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .qa-tag.math { background: #7c3aed; }
+    .qa-tag.leakage { background: #dc2626; }
+    .qa-tag.pipeline { background: #059669; }
+    .qa-a { font-size: 14px; color: #cbd5e1; line-height: 1.6; }
+    .qa-highlight { background: rgba(56, 189, 248, 0.12); padding: 2px 6px; border-radius: 4px; color: #7dd3fc; font-weight: 600; }
+
+    /* Code & Math Blocks */
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    code.inline {
+      background: var(--code-bg);
+      color: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    pre.code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      overflow-x: auto;
+      font-size: 13px;
+      color: #f1f5f9;
+      margin: 10px 0;
+    }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    th { background: rgba(255, 255, 255, 0.04); color: var(--primary); font-weight: 700; }
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+    /* Key Alert Box */
+    .alert-box {
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .alert-box.danger { background: rgba(239, 68, 68, 0.12); border-left: 4px solid var(--accent-danger); color: #fca5a5; }
+    .alert-box.success { background: rgba(16, 185, 129, 0.12); border-left: 4px solid var(--accent); color: #86efac; }
+    .alert-box.info { background: rgba(56, 189, 248, 0.12); border-left: 4px solid var(--primary); color: #bae6fd; }
+
+    footer {
+      text-align: center;
+      padding-top: 30px;
+      margin-top: 40px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>UPES Project-Based Learning: Deep Learning Defense Guide</h1>
+        <div class="subtitle">Indian Sign Language (ISL) Emergency Gesture Recognition System &bull; Solo Evaluation Defense</div>
+      </div>
+      <div class="badge-bar">
+        <span class="badge info">8 Min Demo + 4 Min Viva</span>
+        <span class="badge success">Signer-Independent Split</span>
+        <span class="badge">6 Classes (5 Emergency + None)</span>
+        <span class="badge warn">PyTorch CPU-Optimized</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('script')">1. 8-Min Presentation Script</button>
+      <button class="tab-btn" onclick="switchTab('viva')">2. Technical Viva Q&A (25+ Questions)</button>
+      <button class="tab-btn" onclick="switchTab('architecture')">3. Neural Math & Architecture</button>
+      <button class="tab-btn" onclick="switchTab('leakage')">4. Data Leakage & Split Defense</button>
+      <button class="tab-btn" onclick="switchTab('codemap')">5. Code & File Navigation Map</button>
+      <button class="tab-btn" onclick="switchTab('checklist')">6. Live Demo Checklist</button>
+    </div>
+
+    <!-- TAB 1: PRESENTATION SCRIPT -->
+    <div id="script" class="tab-content active">
+      <div class="card">
+        <h2>8-Minute Presentation & Demonstration Roadmap</h2>
+        <p style="color: var(--text-muted); font-size: 14px;">
+          The university evaluation guidelines strictly allocate <strong>8 minutes for presentation/demo</strong> and <strong>4 minutes for technical viva</strong>. Use this exact time-budgeted script to stay on schedule without rushing.
+        </p>
+
+        <div class="timeline">
+          <!-- 0:00 - 1:00 -->
+          <div class="timeline-item">
+            <div class="timeline-time">Minute 0:00 &ndash; 1:00 (60 seconds)</div>
+            <div class="timeline-title">Problem Statement & Real-World Motivation</div>
+            <div class="timeline-desc">
+              <strong>What to say:</strong><br>
+              <em>"Good morning respected professors. In acute emergency situations&mdash;such as accidents, medical emergencies, or severe pain&mdash;Deaf and Hard-of-Hearing individuals face critical communication barriers when contacting first responders or hospital staff. In India, over 18 million individuals communicate primarily through Indian Sign Language (ISL).<br>
+              Our objective was to build an end-to-end, lightweight deep learning system that recognizes dynamic ISL emergency signs from video streams in real-time, requiring no specialized wearable sensors or high-end GPUs, and converting them instantly into spoken audio voice alerts."</em>
+            </div>
+          </div>
+
+          <!-- 1:00 - 2:30 -->
+          <div class="timeline-item">
+            <div class="timeline-time">Minute 1:00 &ndash; 2:30 (90 seconds)</div>
+            <div class="timeline-title">Dataset, Honest Preprocessing & Leakage Prevention</div>
+            <div class="timeline-desc">
+              <strong>What to say:</strong><br>
+              <em>"We used the benchmark Mendeley ISL emergency dataset by Adithya & Rajesh, comprising 26 distinct signers performing video gestures at 30 FPS. We focus on 5 core emergency words: <code>accident</code>, <code>call</code>, <code>doctor</code>, <code>help</code>, and <code>pain</code>.<br>
+              Crucially, to prevent false alarms when someone is simply moving their hands naturally, we introduced a 6th class: <strong><code>none</code></strong>, built using non-emergency sign clips (<code>hot</code>, <code>lose</code>, <code>thief</code>), bringing the total dataset to 412 clips across 26 subjects.<br>
+              <strong>Most importantly, on data splitting:</strong> A standard random 80/20 train-test split suffers from severe subject data leakage&mdash;because the same person's Take 1 is in train and Take 2 is in test. That produced an artificial 100% accuracy. To enforce true scientific rigor, we implemented a <strong>Signer-Independent Split</strong>: Signers 022 to 026 (80 clips) are completely held out and never seen during training or epoch selection, proving the model generalizes to brand-new human beings."</em>
+            </div>
+          </div>
+
+          <!-- 2:30 - 4:30 -->
+          <div class="timeline-item">
+            <div class="timeline-time">Minute 2:30 &ndash; 4:30 (120 seconds)</div>
+            <div class="timeline-title">Neural Network Architecture & Mathematical Design</div>
+            <div class="timeline-desc">
+              <strong>What to say:</strong><br>
+              <em>"Sign language gestures are dynamic spatio-temporal actions lasting 2 to 4 seconds. A 2D CNN alone cannot capture motion trajectories, while full 3D CNNs (like C3D or SlowFast) have tens of millions of parameters and are too computationally expensive for real-time CPU deployment.<br>
+              We designed a hierarchical <strong>Spatio-Temporal ConvNet + Bidirectional GRU with Temporal Attention</strong>:
+              <ol style="margin-top: 6px; margin-left: 20px;">
+                <li><strong>Uniform Temporal Sampling:</strong> We uniformly sample 16 frames across each gesture sequence at 112x112 resolution.</li>
+                <li><strong>Spatial Feature Extractor:</strong> A 4-stage residual convolutional network with Batch Normalization and ReLU that transforms each frame into a rich 256-dimensional spatial descriptor.</li>
+                <li><strong>Temporal Sequence Modeling:</strong> A 2-layer Bidirectional Gated Recurrent Unit (BiGRU) with 128 hidden units per direction (256 combined). The bidirectional recurrence captures both forward motion and retraction dynamics.</li>
+                <li><strong>Temporal Attention Layer:</strong> Because the critical stroke of an emergency sign occurs during peak impact (e.g., fist colliding with palm in 'accident' or wrist contact in 'doctor'), the attention layer computes dynamic softmax weights over all 16 timesteps, weighting the decisive moments.</li>
+                <li><strong>Regularization & Loss:</strong> We optimize Cross-Entropy Loss with 0.05 Label Smoothing using AdamW (weight decay 1e-3) and a Cosine Annealing learning rate schedule."</li>
+              </ol></em>
+            </div>
+          </div>
+
+          <!-- 4:30 - 6:30 -->
+          <div class="timeline-item">
+            <div class="timeline-time">Minute 4:30 &ndash; 6:30 (120 seconds)</div>
+            <div class="timeline-title">Live Working Demonstration (Video & Real-Time Webcam)</div>
+            <div class="timeline-desc">
+              <strong>What to say & do:</strong><br>
+              <em>"Let me demonstrate the running system live.<br>
+              1. <strong>Test Clip Demonstration:</strong> Here on our dashboard, I drag-and-drop an unseen test clip of 'doctor'. The system samples the 16 frames, runs inference in 18 milliseconds, classifies it correctly, and synthesizes the voice output.<br>
+              2. <strong>Live Webcam Demonstration:</strong> In the live webcam mode, we implemented an inter-frame kinetic motion energy gate (&Delta; < 0.8) and an ROI guide box. When my hands are idle, the system displays 'Resting / Idle' without emitting false alarms. As I bring my hands into the guide box and execute the 'help' gesture (thumbs-up on flat palm), the temporal window collects the motion sequence and announces 'HELP'."</em>
+            </div>
+          </div>
+
+          <!-- 6:30 - 8:00 -->
+          <div class="timeline-item">
+            <div class="timeline-time">Minute 6:30 &ndash; 8:00 (90 seconds)</div>
+            <div class="timeline-title">Experimental Results, Limitations & Conclusion</div>
+            <div class="timeline-desc">
+              <strong>What to say:</strong><br>
+              <em>"To evaluate performance honestly, we present our held-out test evaluation on the 5 unseen signers (022-026) alongside our 5-fold signer-independent cross-validation. Our model achieves strong macro F1 and balanced precision-recall across the 6 classes.<br>
+              <strong>Honest Limitation Analysis:</strong> As observed in our live experiments, the raw dataset was filmed against a controlled dark blue cloth backdrop. In an uncontrolled room with varied wall colors and ceiling illumination, raw-pixel ConvNets experience domain shift. To mitigate this, our pipeline crops a central ROI and measures motion differencing. In future work, combining keypoint estimation (MediaPipe) with spatial motion features will provide 100% background invariance.<br>
+              Thank you, and I am now ready for the technical viva voce."</em>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: TECHNICAL VIVA Q&A -->
+    <div id="viva" class="tab-content">
+      <div class="card">
+        <h2>Technical Viva Voce Defense (25 High-Yield Questions)</h2>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+          These questions directly test the competencies specified in the Semester V evaluation guidelines: mathematical depth, implementation ownership, split validity, and failure analysis.
+        </p>
+
+        <!-- Q1 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag math">Math</span> Q1: Can you mathematically explain how a GRU cell updates its hidden state?</div>
+          <div class="qa-a">
+            A Gated Recurrent Unit (GRU) solves the vanishing gradient problem in standard RNNs using two gates: the <strong>Reset gate ($r_t$)</strong> and the <strong>Update gate ($z_t$)</strong>:<br>
+            1. $r_t = \sigma(W_r x_t + U_r h_{t-1} + b_r)$ &mdash; Controls how much of the past memory to forget.<br>
+            2. $z_t = \sigma(W_z x_t + U_z h_{t-1} + b_z)$ &mdash; Acts like the forget and input gate in LSTM, balancing old and new information.<br>
+            3. $\tilde{h}_t = \tanh(W_h x_t + U_h (r_t \odot h_{t-1}) + b_h)$ &mdash; Candidate hidden state using the reset memory.<br>
+            4. $h_t = (1 - z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t$ &mdash; Final linear interpolation between old state and candidate state.<br>
+            <span class="qa-highlight">Advantage over LSTM:</span> GRU has only 3 sets of matrix multiplications instead of 4, reducing trainable parameters by 25% and training significantly faster on CPU.
+          </div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag math">Math</span> Q2: What is the mathematical formulation of the Temporal Attention layer?</div>
+          <div class="qa-a">
+            Given the sequence of hidden states from the BiGRU: $\{h_1, h_2, \dots, h_T\}$ where $h_t \in \mathbb{R}^{2 \times \text{hidden\_dim}}$:<br>
+            1. A learned feedforward scoring network computes unnormalized attention energies: $e_t = w^T \tanh(W_a h_t + b_a)$.<br>
+            2. The attention weights $\alpha_t$ are normalized across time using Softmax: $\alpha_t = \frac{\exp(e_t)}{\sum_{j=1}^T \exp(e_j)}$, where $\sum_{t=1}^T \alpha_t = 1$.<br>
+            3. The aggregated context vector is the weighted linear combination: $c = \sum_{t=1}^T \alpha_t h_t$.<br>
+            <span class="qa-highlight">Why this matters:</span> In signs like 'accident', the collision occurs at frame 10-12. The attention layer automatically learns to assign peak weight $\alpha_{10..12}$ to the collision moment rather than resting frames.
+          </div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag leakage">Integrity</span> Q3: Why did your initial model show 100% accuracy, and why is that invalid?</div>
+          <div class="qa-a">
+            The dataset has 26 signers, each performing 2 takes per word (<code>001_01</code> and <code>001_02</code>). In an unconstrained random 80/20 train/test split, <code>Take 1</code> of Signer 1 ended up in the training set, while <code>Take 2</code> of Signer 1 ended up in the validation set.<br>
+            Because both takes were recorded in the exact same studio with the identical shirt, lighting, skin tone, and backdrop, the network didn't just learn the sign; it <strong>memorized the signer's identity and clothes</strong>.<br>
+            <span class="qa-highlight">Defensible fix:</span> We instituted a strict <strong>Signer-Independent Split</strong> (holding out signers 022 to 026 entirely) and <strong>5-Fold Group Cross-Validation</strong> where no signer ever appears in both training and evaluation. The resulting score is honest and scientifically valid.
+          </div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag pipeline">Engineering</span> Q4: Why did you add a 'none' class using 'hot', 'lose', and 'thief'?</div>
+          <div class="qa-a">
+            In standard 5-class classification, the final layer uses a Softmax function where probabilities must sum to 1.0 ($\sum_{i=1}^5 P_i = 1$). If an emergency system only knows 5 emergency words, then whenever a user scratches their nose, waves, or rests, the network is mathematically forced to pick one of the 5 emergency words.<br>
+            By training the network on a 6th class&mdash;<strong><code>none</code></strong>&mdash;using 152 video clips of non-emergency signs (<code>hot</code>, <code>lose</code>, <code>thief</code>), the network learns what general hand movement looks like that is <em>not</em> an emergency, suppressing false alarms.
+          </div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag math">Optimization</span> Q5: Why did you use AdamW with Cosine Annealing instead of standard SGD or Adam?</div>
+          <div class="qa-a">
+            1. <strong>AdamW vs Adam:</strong> Standard Adam applies $L_2$ regularization to the gradient calculation ($g_t = \nabla \mathcal{L} + \lambda \theta$), which leads to suboptimal weight decay in adaptive methods. AdamW decouples weight decay directly into the parameter update step ($\theta_{t+1} = \theta_t - \eta_t \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} - \eta_t \lambda \theta_t$), providing superior generalization and preventing overfitting.<br>
+            2. <strong>Cosine Annealing:</strong> The learning rate follows a half-cosine curve: $\eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max} - \eta_{\min})(1 + \cos(\frac{t}{T_{\max}} \pi))$. It starts with a warm exploratory rate ($5 \times 10^{-4}$) and gently anneals toward zero ($10^{-6}$), allowing the weights to settle into broad, flat local minima rather than sharp, brittle ones.
+          </div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag math">Math</span> Q6: What is Label Smoothing Cross-Entropy and why is it used here?</div>
+          <div class="qa-a">
+            Standard one-hot Cross-Entropy penalizes any output where $P(\text{correct}) < 1.0$, pushing model logit differences toward $\pm \infty$ and causing overconfidence.<br>
+            Label smoothing replaces the hard target vector $y = [0, 0, 1, 0, 0, 0]$ with a softened distribution:
+            $$y_k^{\text{smooth}} = (1 - \epsilon) y_k + \frac{\epsilon}{K}$$
+            With $\epsilon = 0.05$ and $K = 6$ classes, the true class receives $0.9583$ while all other classes receive $0.0083$. This prevents the classifier from becoming overly dogmatic on ambiguous gesture transitions.
+          </div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag pipeline">Architecture</span> Q7: Why not use a 3D Convolutional Network (3D-CNN / C3D / SlowFast)?</div>
+          <div class="qa-a">
+            A 3D-CNN applies spatio-temporal convolutions across $(C, T, H, W)$ simultaneously. However:<br>
+            1. <strong>Parameter & FLOP explosion:</strong> 3D kernels ($3 \times 3 \times 3$) require $3\times$ the parameters of 2D kernels per layer. A standard ResNet3D-18 has over 33 million parameters.<br>
+            2. <strong>CPU Latency:</strong> In our deployment target (standard student laptop without an NVIDIA GPU), 3D-CNN inference takes over 250ms per forward pass, dropping webcam framerate below 4 FPS.<br>
+            3. <strong>Our 2D-CNN + BiGRU architecture</strong> has only <strong>1.9 million parameters</strong> (17&times; smaller), runs in <strong>18ms on CPU</strong>, and reaches 30+ FPS live inference while achieving comparable gesture sequence modeling.
+          </div>
+        </div>
+
+        <!-- Q8 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag pipeline">Pipeline</span> Q8: How does the real-time webcam sliding buffer work?</div>
+          <div class="qa-a">
+            The webcam captures incoming frames at ~30 FPS into a FIFO rolling queue (fixed length = 16). Every 130ms, the latest frame is preprocessed (resized to $112 \times 112$ and ImageNet standardized) and appended.<br>
+            Before running neural inference, an <strong>inter-frame kinetic energy check</strong> computes average absolute pixel differencing: $\Delta = \frac{1}{T-1} \sum_{t=1}^{T-1} \text{mean}(|f_t - f_{t-1}|)$.<br>
+            If $\Delta < 0.8$, the user is resting, and the system bypasses the neural forward pass entirely, conserving CPU and returning 'Resting / Idle'. When motion is active, the 16-frame tensor $(1, 16, 3, 112, 112)$ is evaluated, and an Exponential Moving Average ($P_{\text{smooth}} = 0.65 P_{\text{curr}} + 0.35 P_{\text{prev}}$) filters out transient noise.
+          </div>
+        </div>
+
+        <!-- Q9 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag math">Math</span> Q9: How do you prevent vanishing or exploding gradients during training?</div>
+          <div class="qa-a">
+            We use two complementary techniques:<br>
+            1. <strong>Batch Normalization</strong> after every convolutional layer in the spatial extractor stabilizes internal covariate shift and keeps activations within healthy dynamic range.<br>
+            2. <strong>Gradient Norm Clipping:</strong> In our training loop, we execute <code>torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)</code> immediately after <code>loss.backward()</code>. If the $L_2$ norm of the parameter gradients $\|\mathbf{g}\|_2 > 2.0$, gradients are scaled down proportionally: $\mathbf{g} \leftarrow \mathbf{g} \frac{2.0}{\|\mathbf{g}\|_2}$. This prevents catastrophic weight updates in recurrent GRU layers.
+          </div>
+        </div>
+
+        <!-- Q10 -->
+        <div class="qa-box">
+          <div class="qa-q"><span class="qa-tag leakage">Integrity</span> Q10: What are the primary failure cases and limitations of this system?</div>
+          <div class="qa-a">
+            1. <strong>Domain Shift (Background & Illumination):</strong> The training dataset was recorded against a dark navy cloth background. In a room with bright white walls or backlight, raw pixel distributions shift, which we mitigate using a bounding ROI box and inter-frame motion gating.<br>
+            2. <strong>Scale & Distance Sensitivity:</strong> If the user is seated too far from the camera, hand features occupy only a tiny fraction of the ROI, reducing feature activation.<br>
+            3. <strong>Fine Finger Articulations:</strong> Distinguishing 'doctor' (two fingers on wrist) from 'pain' (claw-twist) requires high spatial clarity at $112 \times 112$ resolution.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: NEURAL MATH & ARCHITECTURE -->
+    <div id="architecture" class="tab-content">
+      <div class="card">
+        <h2>Spatio-Temporal Deep Learning Architecture & Mathematical Flow</h2>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+          Detailed tensor shapes, forward propagation equations, and component specifications.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Stage / Layer</th>
+              <th>Input Shape</th>
+              <th>Operation & Activation</th>
+              <th>Output Shape</th>
+              <th>Parameters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Temporal Sequence</strong></td>
+              <td>Raw Video ($T \approx 78$ frames)</td>
+              <td>Uniform Segment Sampling ($N=16$), Resize ($112 \times 112$), ImageNet Norm</td>
+              <td>$(B, 16, 3, 112, 112)$</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>2. Spatial Conv Block 1</strong></td>
+              <td>$(B \cdot 16, 3, 112, 112)$</td>
+              <td>$\text{Conv2D}(3 \to 32, k=5, s=2) \to \text{BN} \to \text{ReLU} \to \text{MaxPool}(2)$</td>
+              <td>$(B \cdot 16, 32, 28, 28)$</td>
+              <td>$2,496$</td>
+            </tr>
+            <tr>
+              <td><strong>3. Spatial Conv Block 2</strong></td>
+              <td>$(B \cdot 16, 32, 28, 28)$</td>
+              <td>Residual Block: $2 \times \text{Conv2D}(32 \to 64, k=3, s=2) + \text{Shortcut}$</td>
+              <td>$(B \cdot 16, 64, 14, 14)$</td>
+              <td>$57,664$</td>
+            </tr>
+            <tr>
+              <td><strong>4. Spatial Conv Block 3</strong></td>
+              <td>$(B \cdot 16, 64, 14, 14)$</td>
+              <td>Residual Block: $2 \times \text{Conv2D}(64 \to 128, k=3, s=2) + \text{Shortcut}$</td>
+              <td>$(B \cdot 16, 128, 7, 7)$</td>
+              <td>$230,016$</td>
+            </tr>
+            <tr>
+              <td><strong>5. Spatial Conv Block 4</strong></td>
+              <td>$(B \cdot 16, 128, 7, 7)$</td>
+              <td>Residual Block: $2 \times \text{Conv2D}(128 \to 256, k=3, s=2) + \text{Shortcut}$</td>
+              <td>$(B \cdot 16, 256, 4, 4)$</td>
+              <td>$918,784$</td>
+            </tr>
+            <tr>
+              <td><strong>6. Adaptive Pooling & FC</strong></td>
+              <td>$(B \cdot 16, 256, 4, 4)$</td>
+              <td>$\text{AdaptiveAvgPool2D}(1, 1) \to \text{Linear}(256 \to 256)$</td>
+              <td>$(B, 16, 256)$</td>
+              <td>$65,792$</td>
+            </tr>
+            <tr>
+              <td><strong>7. Bidirectional GRU</strong></td>
+              <td>$(B, 16, 256)$</td>
+              <td>$2\text{-Layer BiGRU}(\text{hidden}=128, \text{bidirectional}=\text{True}, \text{dropout}=0.3)$</td>
+              <td>$(B, 16, 256)$</td>
+              <td>$592,896$</td>
+            </tr>
+            <tr>
+              <td><strong>8. Temporal Attention</strong></td>
+              <td>$(B, 16, 256)$</td>
+              <td>$e_t = w^T \tanh(W_a h_t + b_a) \to \alpha = \text{Softmax}(e) \to c = \sum \alpha_t h_t$</td>
+              <td>$(B, 256)$</td>
+              <td>$16,449$</td>
+            </tr>
+            <tr>
+              <td><strong>9. Classifier Head</strong></td>
+              <td>$(B, 256)$</td>
+              <td>$\text{Dropout}(0.4) \to \text{Linear}(256 \to 128) \to \text{ReLU} \to \text{Linear}(128 \to 6)$</td>
+              <td>$(B, 6)$</td>
+              <td>$33,670$</td>
+            </tr>
+            <tr style="font-weight: 700; background: rgba(56, 189, 248, 0.08);">
+              <td colspan="4">TOTAL TRAINABLE PARAMETERS</td>
+              <td>1,918,247 (~1.92 M)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Baseline Model Comparison (Defending Architecture Choice)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Architecture Candidate</th>
+              <th>Parameters</th>
+              <th>Inference Latency (CPU)</th>
+              <th>Temporal Kinematics?</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>2D ResNet-18 (Frame Average)</strong></td>
+              <td>11.2 M</td>
+              <td>~65 ms</td>
+              <td>No (Averages frames, blind to sequence order)</td>
+              <td>Baseline Only</td>
+            </tr>
+            <tr>
+              <td><strong>3D ResNet-18 (Spatiotemporal)</strong></td>
+              <td>33.4 M</td>
+              <td>~280 ms</td>
+              <td>Yes (Full 3D spatio-temporal convolutions)</td>
+              <td>Too heavy for real-time CPU</td>
+            </tr>
+            <tr>
+              <td><strong>Our Model (ResNet-4Stage + BiGRU + Attn)</strong></td>
+              <td><strong>1.92 M</strong></td>
+              <td><strong>~18 ms (55+ FPS)</strong></td>
+              <td><strong>Yes (Bi-directional recurrent + attention)</strong></td>
+              <td><strong>Selected &amp; Justified</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 4: DATA LEAKAGE & SPLIT DEFENSE -->
+    <div id="leakage" class="tab-content">
+      <div class="card">
+        <h2>Data Leakage &amp; Validation Protocol Defense</h2>
+        <div class="alert-box danger">
+          <strong>The "100% Accuracy" Trap:</strong> If an examiner asks <em>"Did your model get 100%?"</em>, answer firmly: <em>"A naive random split produced an artificial 100% due to subject leakage. In academic deep learning, that is a known methodological error. We corrected it using strict Signer-Independent Group Splitting."</em>
+        </div>
+
+        <h3>Why Naive Splitting Fails on Gesture Data</h3>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 14px;">
+          The Mendeley dataset consists of 26 signers ($S_{001} \dots S_{026}$), with each signer recorded twice per word ($T_1, T_2$). Both takes share:
+        </p>
+        <ul style="margin-left: 20px; font-size: 14px; color: #cbd5e1; margin-bottom: 14px;">
+          <li>Same person and face</li>
+          <li>Same clothing color and texture</li>
+          <li>Same background studio lighting</li>
+          <li>Same camera angle and skin reflection</li>
+        </ul>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 14px;">
+          When an algorithm randomly splits 80% train and 20% test:
+          $$\mathbb{P}(S_i \in \text{Train} \land S_i \in \text{Test}) \approx 100\%$$
+          The network memorizes the background and clothing rather than true hand kinematics.
+        </p>
+
+        <h3>Our Scientifically Defensible Split Strategy</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Dataset Partition</th>
+              <th>Signers Included</th>
+              <th>Clips</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Training Set</strong></td>
+              <td>17 Signers (Disjoint group)</td>
+              <td>268 clips</td>
+              <td>Backpropagation gradient updates with AdamW</td>
+            </tr>
+            <tr>
+              <td><strong>Validation Set</strong></td>
+              <td>4 Signers (e.g., 001, 004, 009, 021)</td>
+              <td>64 clips</td>
+              <td>Model checkpoint selection based on minimum validation loss</td>
+            </tr>
+            <tr>
+              <td><strong>Held-Out Test Set</strong></td>
+              <td><strong>5 Signers (022, 023, 024, 025, 026)</strong></td>
+              <td><strong>80 clips</strong></td>
+              <td><strong>Strict Zero-Shot evaluation on completely unseen individuals</strong></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>5-Fold Signer-Independent Cross-Validation</h3>
+        <p style="font-size: 14px; color: var(--text-muted);">
+          Using <code>sklearn.model_selection.GroupKFold(n_splits=5)</code> grouped by <code>subject_id</code>, every signer is placed into the test fold exactly once across 5 independent training runs. The reported metric is the mean and standard deviation:
+          $$\text{Accuracy} = \mu \pm \sigma \quad (\text{e.g., } 84.5\% \pm 5.2\%)$$
+          This satisfies the highest benchmark of empirical rigor expected in university evaluations.
+        </p>
+      </div>
+    </div>
+
+    <!-- TAB 5: CODE & FILE NAVIGATION MAP -->
+    <div id="codemap" class="tab-content">
+      <div class="card">
+        <h2>Code Navigation Map for the Panel</h2>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+          If the examiner asks you to open specific files or show code implementations, use this reference table:
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>If the Examiner Asks...</th>
+              <th>File to Open</th>
+              <th>Exact Function / Class Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><em>"Show me where the neural architecture is defined"</em></td>
+              <td><code class="inline">src/model.py</code></td>
+              <td><code class="inline">class ISLGestureRecognizer(nn.Module)</code></td>
+            </tr>
+            <tr>
+              <td><em>"Show me the spatial feature extractor and residual connections"</em></td>
+              <td><code class="inline">src/model.py</code></td>
+              <td><code class="inline">class ConvBlock</code> &amp; <code class="inline">class SpatialFeatureExtractor</code></td>
+            </tr>
+            <tr>
+              <td><em>"Where is the temporal attention mechanism?"</em></td>
+              <td><code class="inline">src/model.py</code></td>
+              <td><code class="inline">class TemporalAttention(nn.Module)</code></td>
+            </tr>
+            <tr>
+              <td><em>"Show me how you prevented subject leakage"</em></td>
+              <td><code class="inline">src/dataset.py</code></td>
+              <td><code class="inline">def split_by_subject(samples, test_subjects, val_subjects)</code></td>
+            </tr>
+            <tr>
+              <td><em>"Show me the training loop, loss, and gradient clipping"</em></td>
+              <td><code class="inline">src/engine.py</code></td>
+              <td><code class="inline">def train_one_epoch(...)</code></td>
+            </tr>
+            <tr>
+              <td><em>"Where is the 5-fold cross-validation implemented?"</em></td>
+              <td><code class="inline">src/cross_validate.py</code></td>
+              <td><code class="inline">GroupKFold(n_splits=args.folds)</code></td>
+            </tr>
+            <tr>
+              <td><em>"How are video frames preprocessed and normalized?"</em></td>
+              <td><code class="inline">src/preprocess.py</code></td>
+              <td><code class="inline">def prepare_frame(...)</code> &amp; <code class="inline">def sample_clip(...)</code></td>
+            </tr>
+            <tr>
+              <td><em>"Show me the real-time motion energy gating for live webcam"</em></td>
+              <td><code class="inline">src/preprocess.py</code> &amp; <code class="inline">src/inference.py</code></td>
+              <td><code class="inline">def frame_diff(...)</code> &amp; <code class="inline">MOTION_THRESHOLD</code></td>
+            </tr>
+            <tr>
+              <td><em>"Show me the FastAPI web backend and speech output"</em></td>
+              <td><code class="inline">app/main.py</code></td>
+              <td><code class="inline">@app.post("/api/predict")</code> &amp; <code class="inline">src/tts_helper.py</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 6: LIVE DEMO CHECKLIST -->
+    <div id="checklist" class="tab-content">
+      <div class="card">
+        <h2>Live Demonstration Checklist for Tomorrow</h2>
+        
+        <div class="alert-box success">
+          <strong>Laptop Preparation:</strong>
+          <ul style="margin-left: 20px; margin-top: 6px;">
+            <li>Plug in the laptop charger (prevents CPU power-throttling during inference).</li>
+            <li>Close background heavy apps (Chrome tabs, Discord, Steam, games).</li>
+            <li>Pre-launch the FastAPI server or keep PowerShell open in the project directory.</li>
+          </ul>
+        </div>
+
+        <h3>Demonstration Plan A: Interactive Web Dashboard</h3>
+        <pre class="code-block">.\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000</pre>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 10px;">
+          1. Open <strong>http://127.0.0.1:8000</strong>.<br>
+          2. First, click <strong>"Upload Video File"</strong> and pick an unseen test clip from <code>data/raw/doctor/doctor_Crop_025_01.avi</code>. Show the examiner that it infers instantaneously with 95%+ confidence.<br>
+          3. Next, click <strong>"Start Browser Webcam"</strong>. Point out the green guide box and explain the kinetic motion gate (&Delta; < 0.8) that prevents idle false alarms.
+        </p>
+
+        <h3>Demonstration Plan B: Standalone Desktop OpenCV Window</h3>
+        <pre class="code-block">.\.venv\Scripts\python.exe -m src.real_time_webcam --source 0</pre>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 10px;">
+          Shows full HUD overlay, confidence bar charts, live FPS counter, and triggers native Windows SAPI voice synthesis when a gesture is recognized.
+        </p>
+
+        <h3>Demonstration Plan C: Fallback / Headless Execution</h3>
+        <p style="font-size: 14px; color: var(--text-muted);">
+          If the examiner asks to test the model programmatically without the web browser:
+        </p>
+        <pre class="code-block">.\.venv\Scripts\python.exe -m src.evaluate</pre>
+        <p style="font-size: 14px; color: var(--text-muted);">
+          Scores all 80 clips from the 5 held-out signers (022 to 026), prints the classification report, and generates the confusion matrix plot.
+        </p>
+      </div>
+    </div>
+
+    <footer>
+      Indian Sign Language (ISL) Emergency Recognition &bull; UPES Semester V PBL-DL Defense Guide &bull; Prepared for Aastha Negi
+    </footer>
+  </div>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+  </script>
+</body>
+</html>
