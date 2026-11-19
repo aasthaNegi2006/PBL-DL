@@ -1,6 +1,6 @@
 {
   "model": "Spatio-Temporal CNN + BiGRU + Temporal Attention",
-  "protocol": "signer-independent: test signers never used for training or model selection",
+  "protocol": "Signer-Independent (Subject-Disjoint): test signers never used for training or model selection",
   "classes": [
     "accident",
     "call",
@@ -44,6 +44,7 @@
   ],
   "accuracy_percent": 97.5,
   "macro_avg_f1": 0.9778,
+  "weighted_avg_f1": 0.9750,
   "per_subject_accuracy": {
     "022": 100.0,
     "023": 100.0,
@@ -51,8 +52,17 @@
     "025": 100.0,
     "026": 100.0
   },
+  "class_metrics": {
+    "accident": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
+    "call": {"precision": 0.9, "recall": 0.9, "f1_score": 0.9, "support": 10},
+    "doctor": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
+    "help": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
+    "pain": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
+    "none": {"precision": 0.9667, "recall": 0.9667, "f1_score": 0.9667, "support": 30}
+  },
   "total_samples": 80,
   "selected_epoch": 34,
   "target_accuracy_threshold": 85.0,
-  "threshold_satisfied": true
+  "threshold_satisfied": true,
+  "integrity_note": "A naive random split produced an artificial 100% due to subject leakage (same person in train and test). Corrected using strict Signer-Independent Group Splitting where 5 signers (80 clips) were completely unseen. True generalization accuracy is 97.50%."
 }

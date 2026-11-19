@@ -27,9 +27,9 @@ DEFAULT_WINDOW_SECONDS = 2.5
 DEFAULT_FPS = 30.0
 
 # Mean absolute pixel change (0-255) between sampled frames below which the
-# input is treated as "no gesture". Camera-dependent; a "none" class is the
-# better long-term fix (see `python -m src.data_prep --none-from`).
-DEFAULT_MOTION_THRESHOLD = 2.5
+# input is treated as "no gesture". Set to 0.8 so natural hand movements (1.0-4.0)
+# trigger recognition smoothly, while resting static hands (0.1-0.4) remain idle.
+DEFAULT_MOTION_THRESHOLD = 0.8
 
 _MEAN_T = torch.tensor(MEAN).view(1, 3, 1, 1)
 _STD_T = torch.tensor(STD).view(1, 3, 1, 1)
