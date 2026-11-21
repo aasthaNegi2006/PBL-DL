@@ -149,15 +149,36 @@ Then open `http://127.0.0.1:8000`.
 - Drag-and-drop video tester
 - REST endpoints: `POST /api/predict` (one clip), `POST /api/predict-frames` (live frames), `GET /api/info`
 
+### One-Click Windows Launchers
+For demonstration and evaluation on Windows, three pre-configured batch launchers are provided in the repository root:
+- **`run_web_dashboard.bat`**: Verifies prerequisites, launches uvicorn bound safely to `127.0.0.1:8000`, and opens the interactive dashboard in your browser.
+- **`run_desktop_webcam.bat`**: Launches the OpenCV desktop window with live gesture HUD, motion energy gating, and TTS voice output.
+- **`run_video_demo.bat`**: Runs an offline demonstration on a pre-recorded test clip without requiring a physical camera.
+
 ### Tests
 ```bash
 pip install -r requirements-dev.txt
-pytest
+pytest -v
 ```
+The automated test suite runs 23 regression and unit tests covering dataset splitting, subject ID regex validation, duplicate-recording leakage prevention, model tensor shapes, checkpoint loading security, API status codes (400, 413, 415, 503), and SHA-256 evaluation provenance.
 
 ---
 
-## 📁 6. Project Directory Structure
+## 📚 6. Academic Documentation Suite
+
+Comprehensive technical and evaluation documentation is maintained in the [`docs/`](docs/) directory:
+
+- [**Baseline Audit Report (`docs/BASELINE_AUDIT.md`)**](docs/BASELINE_AUDIT.md): Systematic engineering audit of the codebase, classifying defects from P0 to P3.
+- [**System Architecture Deep Dive (`docs/ARCHITECTURE.md`)**](docs/ARCHITECTURE.md): Mathematical formulations for the Residual ConvNet, BiGRU forward/backward equations, Bahdanau Additive Attention, and computational complexity analysis.
+- [**Model Card (`docs/MODEL_CARD.md`)**](docs/MODEL_CARD.md): Formal model card documenting parameters, training factors, evaluation data, intended use, and domain shift limitations.
+- [**Evaluation Protocol & Leakage Analysis (`docs/EVALUATION_PROTOCOL.md`)**](docs/EVALUATION_PROTOCOL.md): Rigorous breakdown of why random splits produced artificial 100% accuracy and how strict signer-independent group splitting resolved it.
+- [**8-Minute Demo Presentation Guide (`docs/PBE_DEMO_GUIDE.md`)**](docs/PBE_DEMO_GUIDE.md): Minute-by-minute demonstration script for the 8-minute presentation.
+- [**Technical Viva Defense Guide (`docs/PBE_VIVA_QA.md`)**](docs/PBE_VIVA_QA.md): 25 technical questions and detailed answers covering deep learning theory, gradients, architectures, and failure analysis.
+- [**Remediation Changelog (`docs/REMEDIATION_CHANGELOG.md`)**](docs/REMEDIATION_CHANGELOG.md): Complete audit trail of confirmed defects and applied code changes.
+
+---
+
+## 📁 7. Project Directory Structure
 
 ```
 PBL-DL/

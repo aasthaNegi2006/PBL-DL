@@ -127,7 +127,13 @@ def run_real_time_inference(source='0', model_path='models/best_isl_model.pth', 
     spoken = []
 
     smoothed_probs = np.zeros(len(lm.classes), dtype=np.float32)
-    current_pred, current_conf, consecutive_hits = 'Filling window...', 0.0, 0
+    current_pred, current_conf = 'Filling window...', 0.0
+    candidate_class = None
+    consecutive_hits = 0
+    last_confirmed_class = None
+    last_speak_time = 0.0
+    SPEAK_COOLDOWN = 3.0
+    MARGIN_THRESHOLD = 0.12
     fps, prev_time = 30.0, time.time()
     frame_idx = 0
     infer_ms = []
@@ -152,8 +158,11 @@ def run_real_time_inference(source='0', model_path='models/best_isl_model.pth', 
 
             if frame_idx % stride == 0 and window.ready(lm.num_frames):
                 sampled = sample_clip(window.frames(), lm.num_frames)
-                if P.motion_energy(sampled) < motion_threshold:
-                    current_pred, current_conf, consecutive_hits = 'Waiting (idle)', 0.0, 0
+                motion = P.motion_energy(sampled)
+                if motion < motion_threshold:
+                    current_pred, current_conf = 'Waiting (idle)', 0.0
+                    candidate_class = None
+                    consecutive_hits = 0
                     smoothed_probs[:] = 0
                 else:
                     t0 = time.perf_counter()
@@ -168,21 +177,42 @@ def run_real_time_inference(source='0', model_path='models/best_isl_model.pth', 
                     margin = sorted_probs[0] - sorted_probs[1] if len(sorted_probs) > 1 else 1.0
 
                     if pred_name == NONE_CLASS:
-                        current_pred, current_conf, consecutive_hits = 'No sign', 0.0, 0
-                    elif top_conf >= CONFIDENCE_THRESHOLD and margin >= 0.12:
-                        current_pred, current_conf = pred_name, top_conf
-                        consecutive_hits += 1
-                        if consecutive_hits >= HITS_TO_CONFIRM and top_conf >= SPEAK_THRESHOLD:
-                            if not history or history[-1].split()[0] != pred_name.upper():
-                                history.append(f"{pred_name.upper()} ({int(top_conf * 100)}%)")
-                                spoken.append(pred_name)
-                                tts.speak(pred_name)
-                                if not display:
-                                    print(f'[{t:7.2f}s] {pred_name} ({top_conf:.0%})')
+                        current_pred, current_conf = 'No sign', top_conf
+                        candidate_class = None
+                        consecutive_hits = 0
+                    elif top_conf >= CONFIDENCE_THRESHOLD and margin >= MARGIN_THRESHOLD:
+                        if pred_name == candidate_class:
+                            consecutive_hits += 1
+                        else:
+                            candidate_class = pred_name
+                            consecutive_hits = 1
+
+                        if consecutive_hits >= HITS_TO_CONFIRM:
+                            current_pred = f"{candidate_class.upper()} (CONFIRMED)"
+                            current_conf = top_conf
+                            if top_conf >= SPEAK_THRESHOLD:
+                                if candidate_class != last_confirmed_class or (now - last_speak_time) > SPEAK_COOLDOWN:
+                                    entry = f"{candidate_class.upper()} ({int(top_conf * 100)}%)"
+                                    if not history or history[-1].split()[0] != candidate_class.upper():
+                                        history.append(entry)
+                                    spoken.append(candidate_class)
+                                    tts.speak(candidate_class)
+                                    last_confirmed_class = candidate_class
+                                    last_speak_time = now
+                                    if not display:
+                                        print(f'[{t:7.2f}s] CONFIRMED: {candidate_class} ({top_conf:.0%})')
+                        else:
+                            current_pred = f"Detecting {candidate_class} ({consecutive_hits}/{HITS_TO_CONFIRM})..."
+                            current_conf = top_conf
                     else:
                         consecutive_hits = max(0, consecutive_hits - 1)
                         if consecutive_hits == 0:
-                            current_pred, current_conf = 'Detecting...', top_conf
+                            candidate_class = None
+                            current_pred = 'Detecting...'
+                            current_conf = top_conf
+                        else:
+                            current_pred = f"Detecting {candidate_class} ({consecutive_hits}/{HITS_TO_CONFIRM})..."
+                            current_conf = top_conf
             elif not window.ready(lm.num_frames):
                 current_pred = 'Filling window...'
 

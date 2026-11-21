@@ -1,5 +1,4 @@
 import os
-import pickle
 import random
 import re
 
@@ -14,6 +13,7 @@ NONE_CLASS = 'none'
 
 # Dataset filenames end in <subject>_<take>, e.g. help_Crop_001_01.avi -> subject 001, take 01.
 _SUBJECT_TAKE_RE = re.compile(r'(\d{3})_(\d{2})$')
+_SUBJECT_RE = re.compile(r'^\d{3}$')
 
 DEFAULT_CACHE = os.path.join('data', 'processed', 'cached_all_frames.pt')
 
@@ -24,24 +24,30 @@ def parse_subject_take(video_name):
     if not match:
         raise ValueError(f'Cannot read subject/take from video name "{video_name}" '
                          '(expected it to end in _<3-digit subject>_<2-digit take>)')
-    return match.group(1), match.group(2)
+    subject, take = match.group(1), match.group(2)
+    if not _SUBJECT_RE.match(subject):
+        raise ValueError(f'Invalid subject ID "{subject}" parsed from "{video_name}" (expected 3 digits)')
+    return subject, take
 
 
 def subject_of(sample):
-    return sample.get('subject') or parse_subject_take(sample['video_name'])[0]
+    subj = sample.get('subject') or parse_subject_take(sample['video_name'])[0]
+    if not _SUBJECT_RE.match(subj):
+        raise ValueError(f'Invalid subject ID "{subj}" in sample (expected 3 digits)')
+    return subj
 
 
 def load_cache(path=DEFAULT_CACHE):
-    """Load the frame cache built by src.data_prep. Returns (samples, classes, meta)."""
+    """Load the frame cache built by src.data_prep. Returns (samples, classes, meta).
+    Always enforces safe tensor loading (weights_only=True) to eliminate arbitrary code execution.
+    """
     if not os.path.exists(path):
         raise FileNotFoundError(f'Frame cache not found at {path}. Build it with: python -m src.data_prep')
     try:
         data = torch.load(path, weights_only=True)
-    except pickle.UnpicklingError:
-        # Caches made by the original project stored numpy arrays, which need the
-        # full unpickler. Only do this for a cache you built yourself.
-        print(f'Note: {path} uses the old cache format. Rebuild it with python -m src.data_prep.')
-        data = torch.load(path, weights_only=False)
+    except Exception as e:
+        raise RuntimeError(f'Failed to load cache safely from {path}: {e}. Rebuild it with: python -m src.data_prep')
+
     samples = data['samples']
     classes = list(data.get('classes', CLASSES))
     for s in samples:
@@ -69,28 +75,55 @@ def choose_val_subjects(candidates, n_val, seed):
 def split_by_subject(samples, test_subjects, val_subjects):
     """Split samples so that each signer appears in exactly one of train / val / test.
 
-    Every signer recorded each word twice. Splitting clips at random (as the
-    original code did) puts a signer's second take in training while the first
-    is used for validation, which inflates accuracy.
+    Enforces strict mathematical disjointness:
+        train_signers ∩ val_signers = ∅
+        train_signers ∩ test_signers = ∅
+        val_signers ∩ test_signers = ∅
+
+    Every signer recorded each word twice. Splitting clips at random puts a signer's
+    second take in training while the first is in test, inflating accuracy.
     """
-    test_subjects, val_subjects = set(test_subjects), set(val_subjects)
-    overlap = test_subjects & val_subjects
+    test_set = set(test_subjects)
+    val_set = set(val_subjects)
+    known_set = set(all_subjects(samples))
+
+    for s in test_set | val_set:
+        if not _SUBJECT_RE.match(s):
+            raise ValueError(f'Invalid subject ID format: {s!r} (expected 3 digits)')
+
+    overlap = test_set & val_set
     if overlap:
         raise ValueError(f'Subjects in both val and test: {sorted(overlap)}')
-    known = set(all_subjects(samples))
-    missing = (test_subjects | val_subjects) - known
+
+    missing = (test_set | val_set) - known_set
     if missing:
-        raise ValueError(f'Unknown subjects {sorted(missing)}; available: {sorted(known)}')
+        raise ValueError(f'Unknown subjects {sorted(missing)}; available: {sorted(known_set)}')
 
     train, val, test = [], [], []
     for s in samples:
         subj = subject_of(s)
-        if subj in test_subjects:
+        if subj in test_set:
             test.append(s)
-        elif subj in val_subjects:
+        elif subj in val_set:
             val.append(s)
         else:
             train.append(s)
+
+    train_set = {subject_of(s) for s in train}
+
+    # Strict disjointness assertions
+    assert not (train_set & val_set), f'Leakage detected: train & val share subjects {train_set & val_set}'
+    assert not (train_set & test_set), f'Leakage detected: train & test share subjects {train_set & test_set}'
+    assert not (val_set & test_set), f'Leakage detected: val & test share subjects {val_set & test_set}'
+
+    # Disallow duplicate-recording leakage across splits
+    train_recs = {s.get('recording_id') for s in train if s.get('recording_id')}
+    val_recs = {s.get('recording_id') for s in val if s.get('recording_id')}
+    test_recs = {s.get('recording_id') for s in test if s.get('recording_id')}
+    assert not (train_recs & val_recs), f'Duplicate recording leakage: train & val share {train_recs & val_recs}'
+    assert not (train_recs & test_recs), f'Duplicate recording leakage: train & test share {train_recs & test_recs}'
+    assert not (val_recs & test_recs), f'Duplicate recording leakage: val & test share {val_recs & test_recs}'
+
     return train, val, test
 
 

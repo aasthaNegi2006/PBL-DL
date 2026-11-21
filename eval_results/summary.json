@@ -1,7 +1,21 @@
 {
+  "experiment_id": "eval_test_20261121_164854",
   "model": "Spatio-Temporal CNN + BiGRU + Temporal Attention",
+  "model_version": "1.1.0",
+  "checkpoint_path": "models\\best_isl_model.pth",
+  "checkpoint_sha256": "527815680e36c5b44fe135f3cbee3c018ad00aaf04caae98af842a92af03ec09",
+  "dataset_version": "ISL-Mendeley-Emergency-v1",
+  "dataset_fingerprint": "cache_size_1201343771_n_80_id_339d3911019a4ac3",
   "protocol": "Signer-Independent (Subject-Disjoint): test signers never used for training or model selection",
   "classes": [
+    "accident",
+    "call",
+    "doctor",
+    "help",
+    "pain",
+    "none"
+  ],
+  "class_names": [
     "accident",
     "call",
     "doctor",
@@ -42,9 +56,57 @@
     "009",
     "021"
   ],
+  "test_subjects": [
+    "022",
+    "023",
+    "024",
+    "025",
+    "026"
+  ],
+  "num_samples": 80,
+  "num_correct": 78,
   "accuracy_percent": 97.5,
+  "accuracy": 0.975,
   "macro_avg_f1": 0.9778,
-  "weighted_avg_f1": 0.9750,
+  "weighted_avg_f1": 0.975,
+  "per_class_metrics": {
+    "accident": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 10
+    },
+    "call": {
+      "precision": 0.9,
+      "recall": 0.9,
+      "f1_score": 0.9,
+      "support": 10
+    },
+    "doctor": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 10
+    },
+    "help": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 10
+    },
+    "pain": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 10
+    },
+    "none": {
+      "precision": 0.9667,
+      "recall": 0.9667,
+      "f1_score": 0.9667,
+      "support": 30
+    }
+  },
   "per_subject_accuracy": {
     "022": 100.0,
     "023": 100.0,
@@ -52,17 +114,61 @@
     "025": 100.0,
     "026": 100.0
   },
-  "class_metrics": {
-    "accident": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
-    "call": {"precision": 0.9, "recall": 0.9, "f1_score": 0.9, "support": 10},
-    "doctor": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
-    "help": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
-    "pain": {"precision": 1.0, "recall": 1.0, "f1_score": 1.0, "support": 10},
-    "none": {"precision": 0.9667, "recall": 0.9667, "f1_score": 0.9667, "support": 30}
-  },
+  "confusion_matrix": [
+    [
+      10,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      9,
+      0,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      10,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      10,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      10,
+      0
+    ],
+    [
+      0,
+      1,
+      0,
+      0,
+      0,
+      29
+    ]
+  ],
   "total_samples": 80,
   "selected_epoch": 34,
   "target_accuracy_threshold": 85.0,
   "threshold_satisfied": true,
-  "integrity_note": "A naive random split produced an artificial 100% due to subject leakage (same person in train and test). Corrected using strict Signer-Independent Group Splitting where 5 signers (80 clips) were completely unseen. True generalization accuracy is 97.50%."
+  "evaluation_timestamp": "2026-11-21T16:48:54.319194+00:00",
+  "evaluation_code_version": "6dc8795",
+  "integrity_note": "Evaluated on disjoint held-out signers. The test partition was excluded from all training and hyperparameter selection stages."
 }

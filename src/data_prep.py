@@ -96,6 +96,7 @@ def main():
             'word': word,
             'subject': subject,
             'take': take,
+            'recording_id': f'{word}_{subject}_{take}',
             'video_name': os.path.basename(path),
         })
 

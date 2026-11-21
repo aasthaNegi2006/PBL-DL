@@ -1,5 +1,6 @@
 import base64
 import binascii
+import hashlib
 import json
 import os
 import shutil
@@ -7,7 +8,7 @@ import tempfile
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import cv2
 import numpy as np
@@ -36,6 +37,16 @@ EVAL_FILES = {'confusion_matrix.png', 'training_curves.png', 'classification_rep
 
 _model_lock = threading.Lock()
 _state = {'lm': None, 'error': None}
+
+
+def compute_file_sha256(path):
+    if not Path(path).exists():
+        return None
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def get_model():
@@ -69,8 +80,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The dashboard is served from this app, so it needs no CORS. To call the API from
-# another site, list its origins, e.g. ISL_CORS_ORIGINS=http://localhost:3000
 _cors_origins = [o.strip() for o in os.environ.get('ISL_CORS_ORIGINS', '').split(',') if o.strip()]
 if _cors_origins:
     app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=['GET', 'POST'],
@@ -84,12 +93,22 @@ def _read_json(path):
     return {}
 
 
-def _result(lm, probs, motion=None, extra=None, live=True):
-    """Shared response shape for both prediction endpoints.
+class PredictionResponse(BaseModel):
+    prediction: str
+    is_idle: bool = False
+    confidence_percentage: float = 0.0
+    low_confidence: bool = False
+    margin_over_second: float = 0.0
+    class_probabilities: dict[str, float] = {}
+    avg_motion: float | None = None
+    message: str | None = None
+    top_class: str | None = None
+    total_frames_in_video: int | None = None
+    attention_weights: list[float] | None = None
 
-    Live predictions below the confidence threshold or with low margin over
-    second place are reported as "detecting" to avoid false positive triggers.
-    """
+
+def _result(lm, probs, motion=None, extra=None, live=True) -> dict[str, Any]:
+    """Shared response shape for both prediction endpoints."""
     top_idx = int(np.argmax(probs))
     pred_class = lm.classes[top_idx]
     confidence = float(probs[top_idx])
@@ -97,7 +116,7 @@ def _result(lm, probs, motion=None, extra=None, live=True):
     margin = float(sorted_probs[0] - sorted_probs[1]) if len(sorted_probs) > 1 else 1.0
 
     is_low_conf = confidence < CONFIDENCE_THRESHOLD or (live and margin < 0.12)
-    body = {
+    body: dict[str, Any] = {
         'is_idle': False,
         'confidence_percentage': round(confidence * 100, 2),
         'low_confidence': is_low_conf,
@@ -124,6 +143,12 @@ def get_info():
         lm = get_model()
     except HTTPException:
         pass
+
+    summary = _read_json(EVAL_DIR / 'summary.json')
+    ckpt_sha = compute_file_sha256(MODEL_PATH)
+    eval_sha = summary.get('checkpoint_sha256')
+    provenance_verified = bool(ckpt_sha and eval_sha and ckpt_sha == eval_sha)
+
     return {
         'status': 'online',
         'model_loaded': lm is not None,
@@ -137,8 +162,10 @@ def get_info():
         'roi': P.DEFAULT_ROI,
         'motion_threshold': P.DEFAULT_MOTION_THRESHOLD,
         'confidence_threshold': CONFIDENCE_THRESHOLD,
+        'checkpoint_sha256': ckpt_sha,
+        'evaluation_provenance_verified': provenance_verified,
         'checkpoint': {k: v for k, v in (lm.meta if lm else {}).items() if k != 'split'},
-        'evaluation_summary': _read_json(EVAL_DIR / 'summary.json'),
+        'evaluation_summary': summary,
         'cross_validation': {k: v for k, v in _read_json(EVAL_DIR / 'cross_validation.json').items() if k != 'folds'},
     }
 
@@ -155,13 +182,11 @@ B64Frame = Annotated[str, StringConstraints(max_length=MAX_FRAME_B64_CHARS)]
 
 
 class FrameSequencePayload(BaseModel):
-    # Frames spread evenly across the last gesture-length window (see /api/info window_seconds).
     frames: list[B64Frame] = Field(min_length=1, max_length=MAX_LIVE_FRAMES)
-    # Crop to the same centre box as the desktop app. Set false for already-cropped frames.
     crop: bool = True
 
 
-@app.post("/api/predict-frames")
+@app.post("/api/predict-frames", response_model=PredictionResponse)
 def predict_from_base64_frames(payload: FrameSequencePayload):
     lm = get_model()
 
@@ -172,9 +197,9 @@ def predict_from_base64_frames(payload: FrameSequencePayload):
         try:
             img_bytes = base64.b64decode(item, validate=True)
         except (binascii.Error, ValueError):
-            raise HTTPException(status_code=400, detail='A frame is not valid base64.')
+            raise HTTPException(status_code=400, detail='A frame contains invalid base64 encoding.')
         img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
-        if img is not None:
+        if img is not None and img.size > 0:
             decoded.append(P.prepare_frame(img, crop=payload.crop))
 
     if len(decoded) < MIN_LIVE_FRAMES:
@@ -182,44 +207,46 @@ def predict_from_base64_frames(payload: FrameSequencePayload):
 
     sampled = sample_clip(decoded, lm.num_frames)
     motion = P.motion_energy(sampled)
-    # Idle filter: if the hands are not moving, do not raise a false alarm
     if motion < P.DEFAULT_MOTION_THRESHOLD:
-        return {
-            'prediction': 'idle',
-            'is_idle': True,
-            'confidence_percentage': 0.0,
-            'avg_motion': round(motion, 2),
-            'message': 'Idle / no active gesture detected. Sign inside the box.',
-            'class_probabilities': {c: 0.0 for c in lm.classes},
-        }
+        return PredictionResponse(
+            prediction='idle',
+            is_idle=True,
+            confidence_percentage=0.0,
+            avg_motion=round(motion, 2),
+            message='Idle / no active gesture detected. Sign inside the box.',
+            class_probabilities={c: 0.0 for c in lm.classes},
+        )
 
     probs, _ = predict_clip(lm, sampled)
-    return _result(lm, probs, motion)
+    return PredictionResponse(**_result(lm, probs, motion))
 
 
-@app.post("/api/predict")
+@app.post("/api/predict", response_model=PredictionResponse)
 def predict_gesture(file: UploadFile = File(...), crop: bool = False):
-    """Classify one uploaded clip containing a single sign.
-
-    Dataset clips are already cropped, so crop defaults to False. Pass
-    ?crop=true for a full-frame recording, to crop it like the live camera.
-    """
+    """Classify one uploaded clip containing a single sign."""
     lm = get_model()
 
-    suffix = Path(file.filename or '').suffix.lower()
-    suffix = suffix if suffix in VIDEO_EXTS else '.avi'
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp_path = tmp.name
-        written = 0
-        while chunk := file.file.read(1024 * 1024):
-            written += len(chunk)
-            if written > MAX_UPLOAD_BYTES:
-                break
-            tmp.write(chunk)
+    filename = file.filename or ''
+    suffix = Path(filename).suffix.lower()
+    if suffix not in VIDEO_EXTS:
+        raise HTTPException(
+            status_code=415,
+            detail=f'Unsupported video extension "{suffix}". Supported formats: {sorted(VIDEO_EXTS)}'
+        )
 
+    tmp_path = None
     try:
-        if written > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail=f'Video is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp_path = tmp.name
+            written = 0
+            while chunk := file.file.read(1024 * 1024):
+                written += len(chunk)
+                if written > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f'Video exceeds maximum upload size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.'
+                    )
+                tmp.write(chunk)
 
         cap = cv2.VideoCapture(tmp_path)
         frames = []
@@ -233,18 +260,21 @@ def predict_gesture(file: UploadFile = File(...), crop: bool = False):
             cap.release()
 
         if not frames:
-            raise HTTPException(status_code=400, detail='Could not read frames from the uploaded video.')
+            raise HTTPException(status_code=400, detail='Could not read valid video frames from upload.')
         if len(frames) > MAX_VIDEO_FRAMES:
-            raise HTTPException(status_code=413, detail=f'Video is longer than {MAX_VIDEO_FRAMES} frames. '
-                                                        'Upload a clip containing a single sign.')
+            raise HTTPException(
+                status_code=413,
+                detail=f'Video has {len(frames)} frames, which exceeds maximum limit of {MAX_VIDEO_FRAMES} frames (~30 seconds).'
+            )
 
         probs, attn = predict_clip(lm, sample_clip(frames, lm.num_frames))
-        return _result(lm, probs, live=False, extra={
+        return PredictionResponse(**_result(lm, probs, live=False, extra={
             'total_frames_in_video': len(frames),
             'attention_weights': [round(float(w), 4) for w in attn],
-        })
+        }))
     finally:
-        os.remove(tmp_path)
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 @app.get("/", response_class=HTMLResponse)

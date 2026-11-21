@@ -211,3 +211,34 @@ def test_missing_model_returns_503(api, tmp_path, monkeypatch):
         assert c.get('/api/info').json()['model_loaded'] is False
         r = c.post('/api/predict-frames', json={'frames': ['AAAA'] * 16})
         assert r.status_code == 503
+
+
+def test_unsupported_upload_extension_returns_415(client):
+    r = client.post('/api/predict', files={'file': ('exploit.exe', b'MZ90...', 'application/x-msdownload')})
+    assert r.status_code == 415
+
+
+def test_api_info_provenance_fields(client):
+    info = client.get('/api/info').json()
+    assert 'checkpoint_sha256' in info
+    assert 'evaluation_provenance_verified' in info
+    assert 'evaluation_summary' in info
+
+
+def test_duplicate_recording_leakage_rejected():
+    # Two clips sharing the same recording_id but placed in different subjects must raise ValueError or assertion
+    samples = [
+        fake_sample(0, '001', '01', n=4),
+        fake_sample(0, '002', '01', n=4),
+    ]
+    samples[0]['recording_id'] = 'help_001_01'
+    samples[1]['recording_id'] = 'help_001_01'  # duplicate recording assigned to another subject
+    with pytest.raises(AssertionError):
+        split_by_subject(samples, test_subjects=['001'], val_subjects=['002'])
+
+
+def test_subject_id_validation_rejects_malformed_signers():
+    samples = [fake_sample(0, '1', '01', n=4)]  # Not 3 digits
+    with pytest.raises(ValueError):
+        split_by_subject(samples, test_subjects=['1'], val_subjects=[])
+
