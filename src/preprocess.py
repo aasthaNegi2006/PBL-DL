@@ -17,19 +17,21 @@ MEAN = (0.485, 0.456, 0.406)
 STD = (0.229, 0.224, 0.225)
 
 # Live camera framing. Training clips are the dataset's pre-cropped videos, so
-# live frames are cropped to a centred square to approximate that framing
-# (signer's upper body and hands). `size` is a fraction of the shorter side.
-# Dataset clips (uploads, --source file.avi) are already cropped: don't crop them again.
-DEFAULT_ROI = {'cx': 0.5, 'cy': 0.5, 'size': 0.9}
+# live frames are cropped to approximate that framing (signer's chest and hands).
+# Centered at cx=0.5, cy=0.58 with size=0.75 to capture hands & chest while keeping
+# the face largely above the box (matching the training crop).
+DEFAULT_ROI = {'cx': 0.5, 'cy': 0.58, 'size': 0.75}
 
 # Used when a checkpoint does not record how long training clips were.
 DEFAULT_WINDOW_SECONDS = 2.5
 DEFAULT_FPS = 30.0
 
 # Mean absolute pixel change (0-255) between sampled frames below which the
-# input is treated as "no gesture". Set to 0.8 so natural hand movements (1.0-4.0)
-# trigger recognition smoothly, while resting static hands (0.1-0.4) remain idle.
-DEFAULT_MOTION_THRESHOLD = 0.8
+# input is treated as "no gesture / idle".
+# Sensor noise & breathing produces 1.0 - 2.2; active gestures produce 4.0 - 15.0.
+# Set to 2.4 to reliably suppress idle sensor noise (preventing false "accident" alarms)
+# while smoothly triggering on real hand movements.
+DEFAULT_MOTION_THRESHOLD = 2.4
 
 _MEAN_T = torch.tensor(MEAN).view(1, 3, 1, 1)
 _STD_T = torch.tensor(STD).view(1, 3, 1, 1)

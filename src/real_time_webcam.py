@@ -56,8 +56,8 @@ def draw_hud(frame, roi_rect, current_pred, current_conf, class_probs, fps, spee
         x0, y0, side = roi_rect
         y0 += HEADER_H
         cv2.rectangle(canvas, (x0, y0), (x0 + side, y0 + side), COLOR_ROI, 2)
-        cv2.putText(canvas, "Sign inside this box", (x0 + 8, y0 + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_ROI, 1, cv2.LINE_AA)
+        cv2.putText(canvas, "Place chest & hands in box (face above)", (x0 + 8, y0 + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, COLOR_ROI, 1, cv2.LINE_AA)
 
     px = w + 15
     cv2.putText(canvas, "LIVE PREDICTION", (px, 80), cv2.FONT_HERSHEY_DUPLEX, 0.55, COLOR_WHITE, 1, cv2.LINE_AA)
@@ -164,10 +164,12 @@ def run_real_time_inference(source='0', model_path='models/best_isl_model.pth', 
                     top_idx = int(np.argmax(smoothed_probs))
                     top_conf = float(smoothed_probs[top_idx])
                     pred_name = lm.classes[top_idx]
+                    sorted_probs = np.sort(smoothed_probs)[::-1]
+                    margin = sorted_probs[0] - sorted_probs[1] if len(sorted_probs) > 1 else 1.0
 
                     if pred_name == NONE_CLASS:
                         current_pred, current_conf, consecutive_hits = 'No sign', 0.0, 0
-                    elif top_conf >= CONFIDENCE_THRESHOLD:
+                    elif top_conf >= CONFIDENCE_THRESHOLD and margin >= 0.12:
                         current_pred, current_conf = pred_name, top_conf
                         consecutive_hits += 1
                         if consecutive_hits >= HITS_TO_CONFIRM and top_conf >= SPEAK_THRESHOLD:

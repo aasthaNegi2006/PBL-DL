@@ -87,23 +87,28 @@ def _read_json(path):
 def _result(lm, probs, motion=None, extra=None, live=True):
     """Shared response shape for both prediction endpoints.
 
-    Live predictions below the confidence threshold are reported as "detecting";
-    an uploaded clip always reports its top class, flagged with low_confidence.
+    Live predictions below the confidence threshold or with low margin over
+    second place are reported as "detecting" to avoid false positive triggers.
     """
     top_idx = int(np.argmax(probs))
     pred_class = lm.classes[top_idx]
     confidence = float(probs[top_idx])
+    sorted_probs = np.sort(probs)[::-1]
+    margin = float(sorted_probs[0] - sorted_probs[1]) if len(sorted_probs) > 1 else 1.0
+
+    is_low_conf = confidence < CONFIDENCE_THRESHOLD or (live and margin < 0.12)
     body = {
         'is_idle': False,
         'confidence_percentage': round(confidence * 100, 2),
-        'low_confidence': confidence < CONFIDENCE_THRESHOLD,
+        'low_confidence': is_low_conf,
+        'margin_over_second': round(margin, 3),
         'class_probabilities': {c: float(p) for c, p in zip(lm.classes, probs)},
     }
     if motion is not None:
         body['avg_motion'] = round(motion, 2)
     if pred_class == NONE_CLASS:
         body.update(prediction='none', message='No emergency sign recognised.')
-    elif live and confidence < CONFIDENCE_THRESHOLD:
+    elif live and is_low_conf:
         body.update(prediction='detecting', top_class=pred_class,
                     message=f'Detecting gesture... ({pred_class} {int(confidence * 100)}%)')
     else:

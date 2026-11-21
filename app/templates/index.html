@@ -268,9 +268,9 @@
           <div style="position: relative; display: inline-block; width: 100%; max-width: 480px;">
             <video id="webcamVideo" autoplay playsinline muted style="width: 100%; border-radius: 8px; border: 2px solid var(--accent); background: #000;"></video>
             <!-- Gesture ROI Box Overlay -->
-            <div id="roiBox" style="position: absolute; top: 5%; left: 16.25%; width: 67.5%; height: 90%; border: 2px dashed #00ffcc; border-radius: 6px; pointer-events: none; box-shadow: 0 0 10px rgba(0,255,204,0.3);">
-              <span style="position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,0.65); color: #00ffcc; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
-                SIGN INSIDE THIS BOX
+            <div id="roiBox" style="position: absolute; top: 15%; left: 20%; width: 60%; height: 75%; border: 2px dashed #00ffcc; border-radius: 6px; pointer-events: none; box-shadow: 0 0 10px rgba(0,255,204,0.3);">
+              <span style="position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,0.75); color: #00ffcc; padding: 3px 8px; border-radius: 4px; font-weight: bold; letter-spacing: 0.5px;">
+                PLACE CHEST &amp; HANDS HERE (KEEP FACE ABOVE)
               </span>
             </div>
           </div>
@@ -316,11 +316,11 @@
         </p>
 
         <ul class="details-list" style="margin-bottom: 16px;">
-          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Accident</span><span class="val" style="font-size: 13px;">Bring both hands inward to collide at center</span></li>
-          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Call</span><span class="val" style="font-size: 13px;">Raise hand with curved fingers near ear/face</span></li>
-          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Doctor</span><span class="val" style="font-size: 13px;">Place right fingers on left wrist (checking pulse)</span></li>
-          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Help</span><span class="val" style="font-size: 13px;">Flat left palm, place right thumb-up fist on it</span></li>
-          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Pain</span><span class="val" style="font-size: 13px;">Curled claw-hand twisting in front of chest</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Accident</span><span class="val" style="font-size: 13px;">Fists apart at chest level &rarr; bring inward to collide at center</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Call</span><span class="val" style="font-size: 13px;">Raise right hand with phone-curve fingers up to your ear/cheek</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Doctor</span><span class="val" style="font-size: 13px;">Hold left wrist horizontally &rarr; tap right index+middle finger on pulse</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Help</span><span class="val" style="font-size: 13px;">Flat left palm up &rarr; place right thumb-up fist firmly on top</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Pain</span><span class="val" style="font-size: 13px;">Curled claw-hand directly in front of right chest, twist wrist twice</span></li>
         </ul>
 
         <h3 style="font-size: 15px; margin-top: 12px; margin-bottom: 6px; color: var(--primary);">Desktop OpenCV Window</h3>
@@ -499,7 +499,7 @@
     // Live input must match training: keep a gesture-length window of frames and send
     // 16 frames spread evenly across it, with overlapping windows so no sign is cut in half.
     // The server crops each frame to the same centre box as the desktop app.
-    let modelInfo = { window_seconds: 2.5, num_frames_per_sequence: 16, roi: { cx: 0.5, cy: 0.5, size: 0.9 }, confidence_threshold: 0.75 };
+    let modelInfo = { window_seconds: 2.5, num_frames_per_sequence: 16, roi: { cx: 0.5, cy: 0.58, size: 0.75 }, confidence_threshold: 0.75 };
     const CAPTURE_MS = 66;          // ~15 frames per second
     const PREDICT_EVERY_MS = 500;   // overlapping windows, one request at a time
     const SEND_MAX_WIDTH = 320;
