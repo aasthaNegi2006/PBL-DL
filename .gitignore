@@ -3,13 +3,20 @@
 venv/
 env/
 
-# Python cache
+# Python cache & test artifacts
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 
-# PyTorch checkpoints / large raw cached frames (weights can be committed if desired)
-data/processed/cached_all_frames.pt
+# Raw dataset videos and multi-GB archives (exceeds GitHub limits)
+data/
+*.zip
+latest dataset/
+latest dataset.zip
+
+# Temporary debug files
+eval_results/debug_webcam.jpg
 
 # System / OS
 .DS_Store
