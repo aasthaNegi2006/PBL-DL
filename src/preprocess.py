@@ -16,11 +16,11 @@ NUM_FRAMES = 16
 MEAN = (0.485, 0.456, 0.406)
 STD = (0.229, 0.224, 0.225)
 
-# Live camera framing. Training clips are the dataset's pre-cropped videos, so
-# live frames are cropped to approximate that framing (signer's chest and hands).
-# Centered at cx=0.5, cy=0.58 with size=0.75 to capture hands & chest while keeping
-# the face largely above the box (matching the training crop).
-DEFAULT_ROI = {'cx': 0.5, 'cy': 0.58, 'size': 0.75}
+# Live camera framing. Training clips are the dataset's pre-cropped videos.
+# Centered at cx=0.5, cy=0.50 with size=0.88 to capture the full upper body:
+# chest, hands, neck, and ears/cheek. This ensures gestures like 'call' (raising
+# hand to ear/cheek) and 'pain' (wrist-twist on chest) stay fully inside the ROI.
+DEFAULT_ROI = {'cx': 0.5, 'cy': 0.50, 'size': 0.88}
 
 # Used when a checkpoint does not record how long training clips were.
 DEFAULT_WINDOW_SECONDS = 2.5
@@ -28,10 +28,10 @@ DEFAULT_FPS = 30.0
 
 # Mean absolute pixel change (0-255) between sampled frames below which the
 # input is treated as "no gesture / idle".
-# Sensor noise & breathing produces 1.0 - 2.2; active gestures produce 4.0 - 15.0.
-# Set to 2.4 to reliably suppress idle sensor noise (preventing false "accident" alarms)
-# while smoothly triggering on real hand movements.
-DEFAULT_MOTION_THRESHOLD = 2.4
+# Sensor noise & breathing produces 1.0 - 1.5; subtle gestures (e.g. 'pain') produce
+# 1.8-3.0; active gestures produce 4.0-15.0.
+# Set to 1.8 to catch subtle wrist-twist movements while filtering resting noise.
+DEFAULT_MOTION_THRESHOLD = 1.8
 
 _MEAN_T = torch.tensor(MEAN).view(1, 3, 1, 1)
 _STD_T = torch.tensor(STD).view(1, 3, 1, 1)

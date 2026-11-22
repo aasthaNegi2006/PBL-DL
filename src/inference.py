@@ -10,7 +10,9 @@ from src.dataset import CLASSES, NONE_CLASS
 from src.model import ISLGestureRecognizer
 
 # A sign is only reported when the top class reaches this probability.
-CONFIDENCE_THRESHOLD = 0.75
+# Lowered from 0.75 → 0.70 so subtle gestures like 'pain' (avg conf ~0.80 live)
+# are not silently suppressed by the threshold.
+CONFIDENCE_THRESHOLD = 0.70
 
 
 @dataclass

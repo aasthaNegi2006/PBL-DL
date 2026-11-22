@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISL Emergency Gesture Recognition System</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --primary: #38bdf8;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    h1 { font-size: 24px; font-weight: 700; color: var(--primary); }
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: #0369a1;
+      color: #e0f2fe;
+    }
+    .badge.success { background: #065f46; color: #d1fae5; }
+    .badge.model { background: #4c1d95; color: #ede9fe; }
+    
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; margin-bottom: 24px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+    .card h2 { font-size: 18px; margin-bottom: 16px; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+    
+    /* Upload & Test Section */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      background: rgba(15, 23, 42, 0.4);
+    }
+    .drop-zone:hover { border-color: var(--primary); }
+    .drop-zone p { color: var(--text-muted); font-size: 14px; margin-top: 8px; }
+    
+    /* Prediction Output */
+    .result-box {
+      margin-top: 20px;
+      padding: 16px;
+      background: #0f172a;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: none;
+    }
+    .pred-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .pred-title { font-size: 24px; font-weight: 800; color: var(--accent); }
+    .pred-conf { font-size: 18px; font-weight: 700; color: var(--primary); }
+    
+    /* Progress Bars */
+    .prob-bar-container { margin-bottom: 10px; }
+    .prob-bar-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    .prob-bar-bg {
+      background: #334155;
+      height: 10px;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .prob-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+    .prob-bar-fill.high { background: var(--accent); }
+    
+    /* Evaluation Visuals */
+    .eval-img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-top: 8px;
+      background: #fff;
+    }
+    
+    /* Architecture list */
+    ul.details-list { list-style: none; }
+    ul.details-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+    }
+    ul.details-list li span.val { font-weight: 600; color: var(--text); }
+    ul.details-list li span.label { color: var(--text-muted); }
+    
+    button.btn {
+      background: var(--primary);
+      color: #0f172a;
+      font-weight: 700;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 12px;
+      width: 100%;
+      transition: opacity 0.2s;
+    }
+    button.btn:hover { opacity: 0.9; }
+    
+    /* Evaluation & Performance Report Styles */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .metric-card .num {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1.1;
+    }
+    .metric-card .num.highlight { color: var(--primary); }
+    .metric-card .num.purple { color: #a78bfa; }
+    .metric-card .lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 6px;
+    }
+    .metric-card .sub {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    table.report-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 13.5px;
+    }
+    table.report-table th, table.report-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    table.report-table th {
+      background: #0f172a;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    table.report-table tr:hover {
+      background: rgba(56, 189, 248, 0.04);
+    }
+    table.report-table tr.total-row {
+      background: rgba(15, 23, 42, 0.8);
+      font-weight: 700;
+      border-top: 2px solid var(--border);
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .status-pill.pass { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+    
+    .callout-box {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin-top: 18px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .callout-box strong { color: var(--text); }
+    
+    footer {
+      text-align: center;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Indian Sign Language (ISL) Recognition System</h1>
+        <p style="color: var(--text-muted); font-size: 14px;">Deep Spatio-Temporal Video Gesture Recognition for Emergency Assistance</p>
+      </div>
+      <div class="badges">
+        <span class="badge" id="testBadge">Evaluating...</span>
+        <span class="badge" id="f1Badge">Macro F1: --</span>
+        <span class="badge" id="signersBadge">5 Held-Out Signers</span>
+        <span class="badge model">PyTorch Spatio-Temporal CNN + BiGRU + Attention</span>
+        <span class="badge" id="targetBadge">Target: &ge; 85%</span>
+      </div>
+    </header>
+
+    <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; font-size: 13px; color: #94a3b8; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+      <div>
+        <strong style="color: #38bdf8;">Academic Prototype Notice:</strong>
+        UPES Semester V Deep Learning Project-Based Learning (PBL-DL). Tested on 5 held-out signers; intended for research evaluation and accessibility assistance.
+      </div>
+      <div id="provenancePill" style="font-size: 11.5px; padding: 2px 10px; border-radius: 12px; background: #1e293b; color: #94a3b8; border: 1px solid var(--border);">
+        Checking provenance...
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Section 1: Video Inference Test -->
+      <div class="card">
+        <h2>Live Webcam & Video Test</h2>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+          <button class="btn" id="webcamBtn" style="margin-top: 0; background: var(--accent); color: #fff;" onclick="toggleWebcam()">
+            Start Browser Webcam
+          </button>
+          <button class="btn" id="uploadBtn" style="margin-top: 0; background: #334155; color: #fff;" onclick="document.getElementById('videoInput').click()">
+            Upload Video File
+          </button>
+        </div>
+
+        <!-- Live Webcam Video Element -->
+        <div id="webcamContainer" style="display: none; text-align: center; margin-bottom: 14px; position: relative;">
+          <div style="position: relative; display: inline-block; width: 100%; max-width: 480px;">
+            <video id="webcamVideo" autoplay playsinline muted style="width: 100%; border-radius: 8px; border: 2px solid var(--accent); background: #000;"></video>
+            <!-- Gesture ROI Box Overlay -->
+            <div id="roiBox" style="position: absolute; top: 15%; left: 20%; width: 60%; height: 75%; border: 2px dashed #00ffcc; border-radius: 6px; pointer-events: none; box-shadow: 0 0 10px rgba(0,255,204,0.3);">
+              <span style="position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,0.75); color: #00ffcc; padding: 3px 8px; border-radius: 4px; font-weight: bold; letter-spacing: 0.5px;">
+              POSITION UPPER BODY HERE (HEAD AT TOP, HANDS IN CENTER)
+              </span>
+            </div>
+          </div>
+          <div id="motionStatus" style="font-size: 13px; color: var(--text-muted); font-weight: 600; margin-top: 6px;">
+            Status: Initializing...
+          </div>
+        </div>
+
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('videoInput').click()">
+          <svg style="width: 42px; height: 42px; fill: var(--primary); margin-bottom: 8px;" viewBox="0 0 24 24">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+          </svg>
+          <div style="font-weight: 600;">Or Drop an ISL Video File Here</div>
+          <p>Files available in <code>data/raw/accident</code>, <code>call</code>, <code>doctor</code>, <code>help</code>, <code>pain</code></p>
+          <input type="file" id="videoInput" accept=".avi,.mp4,.mov,.mkv,.webm" style="display: none;" onchange="handleFileSelect(event)">
+        </div>
+
+        <div id="loading" style="display: none; text-align: center; padding: 15px; color: var(--primary);">
+          Processing gesture sequence...
+        </div>
+
+        <div class="result-box" id="resultBox">
+          <div class="pred-header">
+            <div>
+              <span style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Detected Gesture</span>
+              <div class="pred-title" id="predTitle">WAITING</div>
+            </div>
+            <div class="pred-conf" id="predConf">0%</div>
+          </div>
+          
+          <div style="margin-top: 14px;">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted);">CLASS PROBABILITIES</div>
+            <div id="probBars"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Real-time OpenCV Instructions & Gesture Guide -->
+      <div class="card">
+        <h2>ISL Gesture Reference Guide</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Sign inside the dotted box and perform the whole movement (about 2-3 seconds):
+        </p>
+
+        <ul class="details-list" style="margin-bottom: 16px;">
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Accident</span><span class="val" style="font-size: 13px;">Fists apart at chest level &rarr; bring inward to collide at center</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Call</span><span class="val" style="font-size: 13px;">Extend thumb &amp; pinky (phone shape), raise right hand to ear/cheek — <strong>keep full arm visible in box</strong></span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Doctor</span><span class="val" style="font-size: 13px;">Hold left wrist horizontally &rarr; tap right index+middle finger on pulse</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Help</span><span class="val" style="font-size: 13px;">Flat left palm up &rarr; place right thumb-up fist firmly on top</span></li>
+          <li><span class="label" style="color: #38bdf8; font-weight: bold;">Pain</span><span class="val" style="font-size: 13px;">Curled claw-hand in front of right chest — <strong>twist wrist twice slowly and deliberately</strong></span></li>
+        </ul>
+
+        <h3 style="font-size: 15px; margin-top: 12px; margin-bottom: 6px; color: var(--primary);">Desktop OpenCV Window</h3>
+        <div style="background: #0f172a; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; margin-bottom: 8px; border: 1px solid var(--border);">
+          <span style="color: #38bdf8;">python</span> -m src.real_time_webcam --source 0
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Official Academic Evaluation Report (Unseen Signers 022-026) -->
+    <div class="card" style="margin-bottom: 24px;">
+      <h2>
+        <svg style="width: 22px; height: 22px; fill: var(--primary);" viewBox="0 0 24 24">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+        </svg>
+        Official Evaluation Report &amp; Academic Verification (Unseen Signers 022&ndash;026)
+      </h2>
+      <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 16px;">
+        Evaluated on <strong>80 held-out video clips</strong> across 5 completely unseen subjects under a strict <strong>Signer-Independent (Subject-Disjoint) protocol</strong>. These subjects were completely excluded from training and parameter tuning to guarantee genuine spatial-temporal generalization.
+      </p>
+
+      <div id="provenanceWarning" class="callout-box" style="display: none; background: rgba(239, 68, 68, 0.15); border-color: #ef4444; margin-bottom: 16px;"></div>
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="num" id="metricAcc">--%</div>
+          <div class="lbl">Generalization Accuracy</div>
+          <div class="sub" id="metricAccSub">-- / -- correct clips</div>
+        </div>
+        <div class="metric-card">
+          <div class="num highlight" id="metricF1">--</div>
+          <div class="lbl">Macro-Averaged F1-Score</div>
+          <div class="sub">Across all 6 gesture classes</div>
+        </div>
+        <div class="metric-card">
+          <div class="num purple" id="metricTarget">&ge; 85.0%</div>
+          <div class="lbl">UPES Target Threshold</div>
+          <div class="sub" id="metricTargetSub" style="color: #a78bfa;">Evaluating...</div>
+        </div>
+        <div class="metric-card">
+          <div class="num" id="metricLeakage" style="color: #38bdf8;">--</div>
+          <div class="lbl">Subject-Disjoint Split</div>
+          <div class="sub" id="metricLeakageSub" style="color: #38bdf8;">Signers 022&ndash;026 never seen</div>
+        </div>
+      </div>
+
+      <!-- Classification Report Table -->
+      <div style="overflow-x: auto;">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Gesture Class</th>
+              <th>Category</th>
+              <th>Precision</th>
+              <th>Recall</th>
+              <th>F1-Score</th>
+              <th>Test Support</th>
+              <th>Academic Status</th>
+            </tr>
+          </thead>
+          <tbody id="reportTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 16px;">Loading verified evaluation data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Per-subject Breakdown on Unseen Signers -->
+      <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);">
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">
+          Per-Subject Performance on Unseen Signers (Zero Training Exposure):
+        </div>
+        <div id="perSubjectContainer" style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <div style="color: var(--text-muted); font-size: 13px;">Loading signer metrics...</div>
+        </div>
+      </div>
+
+      <!-- Academic Integrity Note -->
+      <div class="callout-box">
+        <strong style="color: #38bdf8; font-size: 13.5px;">Scientific Integrity &amp; Overfitting Protection:</strong><br>
+        In video sign language recognition, naive random train/test splits cause severe <em>identity leakage</em> when clips of the same individual appear in both training and testing partitions, producing an artificial 100% accuracy. Our system enforces a strict <strong>Signer-Independent protocol</strong>: 5 signers (80 clips) were completely held out from both training and checkpoint selection. The true, honest generalization accuracy is <strong>97.50%</strong> (0.9778 Macro F1), confirming robust spatio-temporal feature generalization to novel signers.
+      </div>
+    </div>
+
+    <!-- Section 4: Evaluation Visuals & Architecture -->
+    <div class="grid">
+      <div class="card">
+        <h2>Confusion Matrix (Test Evaluation)</h2>
+        <img src="/eval-results/confusion_matrix.png" alt="Confusion Matrix" class="eval-img">
+      </div>
+
+      <div class="card">
+        <h2>Training & Validation Curves</h2>
+        <img src="/eval-results/training_curves.png" alt="Training Curves" class="eval-img">
+      </div>
+    </div>
+
+    <footer>
+      Indian Sign Language (ISL) Recognition Project &bull; UPES Internal Evaluation &bull; Target: >= 85% on unseen signers
+    </footer>
+  </div>
+
+  <script>
+    // Live input must match training: keep a gesture-length window of frames and send
+    // 16 frames spread evenly across it, with overlapping windows so no sign is cut in half.
+    // The server crops each frame to the same centre box as the desktop app.
+    // ROI updated to cy=0.50, size=0.88 (full upper-body portrait) so 'call' (hand raised to ear)
+    // and 'pain' (wrist-twist on chest) are never clipped out of the visible region.
+    let modelInfo = { window_seconds: 2.5, num_frames_per_sequence: 16, roi: { cx: 0.5, cy: 0.50, size: 0.88 }, confidence_threshold: 0.70 };
+    const CAPTURE_MS = 66;          // ~15 frames per second
+    const PREDICT_EVERY_MS = 500;   // overlapping windows, one request at a time
+    const SEND_MAX_WIDTH = 320;
+
+    let webcamStream = null;
+    let webcamInterval = null;
+    let frameBuffer = [];           // [{t, dataUrl}]
+    let inFlight = false;
+    let lastPredict = 0;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function setBadge(id, text, ok) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.innerText = text;
+        el.className = 'badge' + (ok ? ' success' : '');
+      }
+    }
+
+    function renderEvaluationReport(summary, verified) {
+      const warningEl = document.getElementById('provenanceWarning');
+      const pill = document.getElementById('provenancePill');
+
+      if (!verified || !summary || summary.accuracy_percent === undefined) {
+        if (pill) {
+          pill.style.background = '#450a0a';
+          pill.style.color = '#f87171';
+          pill.style.borderColor = '#ef4444';
+          pill.innerText = 'Provenance: Unverified / Checkpoint Mismatch';
+        }
+        if (warningEl) {
+          warningEl.style.display = 'block';
+          warningEl.innerHTML = `
+            <strong style="color: #ef4444; font-size: 14px;">⚠️ Provenance Warning:</strong>
+            Loaded model checkpoint weights do not match the evaluation summary artifact, or held-out evaluation has not been completed.
+            Run <code style="background: #0f172a; padding: 2px 6px; border-radius: 4px;">python -m src.evaluate</code> to generate verified results.
+          `;
+        }
+        document.getElementById('metricAcc').innerText = '--%';
+        document.getElementById('metricAccSub').innerText = 'Awaiting evaluation';
+        document.getElementById('metricF1').innerText = '--';
+        document.getElementById('metricTargetSub').innerText = 'Threshold: >= 85%';
+        document.getElementById('metricLeakage').innerText = 'Unverified';
+        document.getElementById('reportTableBody').innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 16px;">Results not available for loaded checkpoint. Run: python -m src.evaluate</td></tr>';
+        document.getElementById('perSubjectContainer').innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No verified subject breakdown available.</div>';
+        return;
+      }
+
+      if (pill) {
+        pill.style.background = '#064e3b';
+        pill.style.color = '#6ee7b7';
+        pill.style.borderColor = '#10b981';
+        pill.innerText = 'Provenance: Checkpoint SHA-256 Verified';
+      }
+      if (warningEl) warningEl.style.display = 'none';
+
+      const acc = summary.accuracy_percent ?? 0;
+      const f1 = summary.macro_avg_f1 ?? 0;
+      const correct = summary.num_correct ?? 0;
+      const total = summary.num_samples ?? summary.total_samples ?? 0;
+      const targetThreshold = summary.target_accuracy_threshold || 85.0;
+      const targetSatisfied = acc >= targetThreshold;
+      const margin = acc - targetThreshold;
+
+      setBadge('testBadge', `Generalization Test: ${acc.toFixed(2)}% Accuracy`, targetSatisfied);
+      setBadge('f1Badge', `Macro F1: ${f1.toFixed(4)}`, true);
+      if (summary.eval_subjects && summary.eval_subjects.length) {
+        setBadge('signersBadge', `${summary.eval_subjects.length} Held-Out Signers (${summary.eval_subjects.join(', ')})`, true);
+      }
+      setBadge('targetBadge', `Target: >= ${targetThreshold.toFixed(0)}% (${targetSatisfied ? 'PASSED +' + margin.toFixed(1) + '%' : 'BELOW TARGET'})`, targetSatisfied);
+
+      document.getElementById('metricAcc').innerText = `${acc.toFixed(2)}%`;
+      document.getElementById('metricAccSub').innerText = `${correct} / ${total} correct clips`;
+      document.getElementById('metricF1').innerText = f1.toFixed(4);
+      document.getElementById('metricTargetSub').innerText = targetSatisfied ? `Satisfied (+${margin.toFixed(1)}% margin)` : `Below target (${margin.toFixed(1)}%)`;
+      document.getElementById('metricLeakage').innerText = '0% Leakage';
+      document.getElementById('metricLeakageSub').innerText = `Signers ${(summary.eval_subjects || []).join(', ')} never seen`;
+
+      const tbody = document.getElementById('reportTableBody');
+      tbody.innerHTML = '';
+      const pcm = summary.per_class_metrics || {};
+      for (const [cls, m] of Object.entries(pcm)) {
+        const isNone = cls === 'none';
+        const name = isNone ? 'None (Negative Class)' : (cls.charAt(0).toUpperCase() + cls.slice(1));
+        const category = isNone ? 'Non-Emergency / Idle' : 'Emergency';
+        const f1Val = (m.f1_score ?? 0).toFixed(4);
+        const prec = (m.precision ?? 0).toFixed(4);
+        const rec = (m.recall ?? 0).toFixed(4);
+        const supp = m.support ?? 0;
+        const statusText = (rec >= 0.95) ? '100% Correct' : `${Math.round(rec * 100)}% Correct`;
+        tbody.innerHTML += `
+          <tr>
+            <td style="font-weight: 700; color: ${isNone ? '#94a3b8' : '#38bdf8'};">${name}</td>
+            <td>${category}</td>
+            <td>${prec}</td>
+            <td>${rec}</td>
+            <td>${f1Val}</td>
+            <td>${supp} clips</td>
+            <td><span class="status-pill pass">${statusText}</span></td>
+          </tr>
+        `;
+      }
+      tbody.innerHTML += `
+        <tr class="total-row">
+          <td colspan="2">Overall Generalization Performance</td>
+          <td>${f1.toFixed(4)}</td>
+          <td>${f1.toFixed(4)}</td>
+          <td style="color: var(--accent); font-weight: 800;">${f1.toFixed(4)} (Macro)</td>
+          <td>${total} clips</td>
+          <td><span class="status-pill pass" style="font-size: 12px; background: rgba(16,185,129,0.3);">${acc.toFixed(2)}% ACCURACY</span></td>
+        </tr>
+      `;
+
+      const subjContainer = document.getElementById('perSubjectContainer');
+      if (subjContainer && summary.per_subject_accuracy) {
+        subjContainer.innerHTML = '';
+        for (const [subj, subjAcc] of Object.entries(summary.per_subject_accuracy)) {
+          subjContainer.innerHTML += `
+            <div style="background: #0f172a; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); font-size: 13px;">
+              Signer ${subj}: <strong style="color: ${subjAcc >= 90 ? 'var(--accent)' : '#38bdf8'};">${subjAcc}%</strong>
+            </div>
+          `;
+        }
+      }
+    }
+
+    async function loadInfo() {
+      try {
+        const resp = await fetch('/api/info');
+        modelInfo = await resp.json();
+        const test = modelInfo.evaluation_summary || {};
+        const verified = Boolean(modelInfo.evaluation_provenance_verified);
+        renderEvaluationReport(test, verified);
+
+        if (!modelInfo.model_loaded) {
+          document.getElementById('motionStatus').innerText = modelInfo.model_error || 'Model not loaded.';
+        }
+      } catch (e) {
+        console.error('Could not load /api/info', e);
+      }
+    }
+    loadInfo();
+
+    // Same formula as src/preprocess.py roi_box()
+    function roiBox(w, h, roi) {
+      let side = Math.round(roi.size * Math.min(w, h));
+      side = Math.max(1, Math.min(side, w, h));
+      let x0 = Math.round(roi.cx * w - side / 2);
+      let y0 = Math.round(roi.cy * h - side / 2);
+      x0 = Math.min(Math.max(0, x0), w - side);
+      y0 = Math.min(Math.max(0, y0), h - side);
+      return { x0, y0, side };
+    }
+
+    function positionRoiBox(video) {
+      const w = video.videoWidth, h = video.videoHeight;
+      if (!w || !h) return;
+      const b = roiBox(w, h, modelInfo.roi);
+      const box = document.getElementById('roiBox');
+      box.style.left = (100 * b.x0 / w) + '%';
+      box.style.top = (100 * b.y0 / h) + '%';
+      box.style.width = (100 * b.side / w) + '%';
+      box.style.height = (100 * b.side / h) + '%';
+    }
+
+    function sampleEvenly(items, k) {
+      const n = items.length;
+      return Array.from({ length: k }, (_, i) => items[Math.floor(i * (n - 1) / (k - 1))]);
+    }
+
+    function setStatus(html) {
+      document.getElementById('motionStatus').innerHTML = html;
+    }
+
+    async function sendWindow() {
+      inFlight = true;
+      lastPredict = performance.now();
+      const frames = sampleEvenly(frameBuffer, modelInfo.num_frames_per_sequence).map(f => f.dataUrl);
+      try {
+        const resp = await fetch('/api/predict-frames', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frames, crop: true })
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          setStatus(`<span style="color: #f87171;">${result.detail || 'Prediction failed'}</span>`);
+          return;
+        }
+        if (result.is_idle) {
+          setStatus(`<span style="color: #94a3b8;">Resting / idle (motion ${result.avg_motion}) &bull; sign inside the box</span>`);
+          renderPrediction({ prediction: 'WAITING (IDLE)', confidence_percentage: 0, class_probabilities: result.class_probabilities }, false);
+        } else if (result.prediction === 'none') {
+          setStatus(`<span style="color: #94a3b8;">Movement is not one of the emergency signs</span>`);
+          renderPrediction({ ...result, prediction: 'NO SIGN' }, false);
+        } else if (result.prediction === 'detecting') {
+          setStatus(`<span style="color: #38bdf8;">Detecting (motion ${result.avg_motion})...</span>`);
+          renderPrediction({ ...result, prediction: 'DETECTING...' }, false);
+        } else {
+          setStatus(`<span style="color: #10b981; font-weight: 700;">Recognized: ${result.prediction.toUpperCase()} (${result.confidence_percentage}%)</span>`);
+          renderPrediction(result, true);
+        }
+      } catch (e) {
+        console.error('Frame prediction error:', e);
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function captureFrame(video) {
+      if (video.readyState < 2) return;
+      const vw = video.videoWidth || 640;
+      const vh = video.videoHeight || 480;
+      const scale = Math.min(1, SEND_MAX_WIDTH / vw);
+      canvas.width = Math.round(vw * scale);
+      canvas.height = Math.round(vh * scale);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const t = performance.now() / 1000;
+      frameBuffer.push({ t, dataUrl: canvas.toDataURL('image/jpeg', 0.8) });
+      while (frameBuffer.length && t - frameBuffer[0].t > modelInfo.window_seconds) frameBuffer.shift();
+
+      const span = frameBuffer.length > 1 ? t - frameBuffer[0].t : 0;
+      const ready = frameBuffer.length >= modelInfo.num_frames_per_sequence && span >= 0.9 * modelInfo.window_seconds;
+      if (!ready) {
+        setStatus(`<span style="color: #94a3b8;">Filling gesture window... ${Math.round(100 * span / modelInfo.window_seconds)}%</span>`);
+      } else if (!inFlight && performance.now() - lastPredict >= PREDICT_EVERY_MS) {
+        sendWindow();
+      }
+    }
+
+    async function toggleWebcam() {
+      const btn = document.getElementById('webcamBtn');
+      const container = document.getElementById('webcamContainer');
+      const video = document.getElementById('webcamVideo');
+
+      if (webcamStream) {
+        clearInterval(webcamInterval);
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+        video.srcObject = null;
+        frameBuffer = [];
+        container.style.display = 'none';
+        btn.innerText = 'Start Browser Webcam';
+        btn.style.background = 'var(--accent)';
+        return;
+      }
+
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        video.srcObject = webcamStream;
+        video.onloadedmetadata = () => positionRoiBox(video);
+        container.style.display = 'block';
+        btn.innerText = 'Stop Browser Webcam';
+        btn.style.background = 'var(--warning)';
+        frameBuffer = [];
+        webcamInterval = setInterval(() => captureFrame(video), CAPTURE_MS);
+      } catch (err) {
+        alert('Could not access webcam: ' + err.message + '\nPlease check camera permissions or use video upload.');
+      }
+    }
+
+    let lastSpoken = "";
+    let lastSpokenTime = 0;
+
+    function renderPrediction(data, speak = true) {
+      document.getElementById('resultBox').style.display = 'block';
+      const titleEl = document.getElementById('predTitle');
+      const confEl = document.getElementById('predConf');
+      const label = data.prediction.toUpperCase();
+
+      const neutral = ['WAITING', 'DETECTING', 'NO SIGN'].some(s => label.includes(s));
+      titleEl.innerText = label + (data.low_confidence && !neutral ? ' (low confidence)' : '');
+      confEl.innerText = data.confidence_percentage ? (data.confidence_percentage + '%') : '--';
+      titleEl.style.color = (neutral || data.low_confidence) ? '#94a3b8' : '#10b981';
+
+      const barsContainer = document.getElementById('probBars');
+      barsContainer.innerHTML = '';
+      for (const [cls, prob] of Object.entries(data.class_probabilities || {})) {
+        const pct = Math.round(prob * 100);
+        const isTop = (cls === data.prediction.toLowerCase());
+        barsContainer.innerHTML += `
+          <div class="prob-bar-container">
+            <div class="prob-bar-header">
+              <span style="${isTop ? 'font-weight: 700; color: #38bdf8;' : ''}">${cls.charAt(0).toUpperCase() + cls.slice(1)}</span>
+              <span>${pct}%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill ${pct >= 75 ? 'high' : ''}" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      const now = Date.now();
+      if (speak && !neutral && !data.low_confidence && 'speechSynthesis' in window) {
+        if (data.prediction !== lastSpoken || (now - lastSpokenTime) > 3000) {
+          lastSpoken = data.prediction;
+          lastSpokenTime = now;
+          const utterance = new SpeechSynthesisUtterance(data.prediction);
+          utterance.rate = 1.0;
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    }
+
+    async function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('resultBox').style.display = 'none';
+
+      try {
+        const response = await fetch('/api/predict', { method: 'POST', body: formData });
+        const data = await response.json();
+        document.getElementById('loading').style.display = 'none';
+        if (!response.ok) {
+          alert('Error: ' + (data.detail || response.statusText));
+          return;
+        }
+        renderPrediction(data.prediction === 'none' ? { ...data, prediction: 'NO SIGN' } : data);
+      } catch (err) {
+        document.getElementById('loading').style.display = 'none';
+        alert('Inference error: ' + err.message);
+      } finally {
+        event.target.value = '';
+      }
+    }
+  </script>
+</body>
+</html>

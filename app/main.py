@@ -115,7 +115,10 @@ def _result(lm, probs, motion=None, extra=None, live=True) -> dict[str, Any]:
     sorted_probs = np.sort(probs)[::-1]
     margin = float(sorted_probs[0] - sorted_probs[1]) if len(sorted_probs) > 1 else 1.0
 
-    is_low_conf = confidence < CONFIDENCE_THRESHOLD or (live and margin < 0.12)
+    # Lowered from 0.12 → 0.08 to match the desktop webcam app MARGIN_THRESHOLD.
+    # 'call' and 'pain' sometimes produce only 0.09-0.11 margin; 0.12 caused them
+    # to show as 'detecting' indefinitely on the browser webcam feed.
+    is_low_conf = confidence < CONFIDENCE_THRESHOLD or (live and margin < 0.08)
     body: dict[str, Any] = {
         'is_idle': False,
         'confidence_percentage': round(confidence * 100, 2),

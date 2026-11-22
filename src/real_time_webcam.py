@@ -33,8 +33,11 @@ COLOR_ROI = (0, 255, 255)
 
 PANEL_W = 300
 HEADER_H = 50
-SPEAK_THRESHOLD = 0.85
-HITS_TO_CONFIRM = 3
+# Lowered from 0.85 → 0.70: 'pain' and 'call' peak around 0.75-0.82 live; 0.85 silently suppressed them.
+SPEAK_THRESHOLD = 0.70
+# Reduced from 3 → 2: gestures last ~2-2.5s; 3 sustained windows required users to
+# hold the pose unnaturally long. 2 hits balance reliability vs. responsiveness.
+HITS_TO_CONFIRM = 2
 
 
 def draw_hud(frame, roi_rect, current_pred, current_conf, class_probs, fps, speech_enabled, history, window_fill):
@@ -56,8 +59,8 @@ def draw_hud(frame, roi_rect, current_pred, current_conf, class_probs, fps, spee
         x0, y0, side = roi_rect
         y0 += HEADER_H
         cv2.rectangle(canvas, (x0, y0), (x0 + side, y0 + side), COLOR_ROI, 2)
-        cv2.putText(canvas, "Place chest & hands in box (face above)", (x0 + 8, y0 + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, COLOR_ROI, 1, cv2.LINE_AA)
+        cv2.putText(canvas, "Upper body in box: head top, hands center", (x0 + 8, y0 + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, COLOR_ROI, 1, cv2.LINE_AA)
 
     px = w + 15
     cv2.putText(canvas, "LIVE PREDICTION", (px, 80), cv2.FONT_HERSHEY_DUPLEX, 0.55, COLOR_WHITE, 1, cv2.LINE_AA)
@@ -133,7 +136,9 @@ def run_real_time_inference(source='0', model_path='models/best_isl_model.pth', 
     last_confirmed_class = None
     last_speak_time = 0.0
     SPEAK_COOLDOWN = 3.0
-    MARGIN_THRESHOLD = 0.12
+    # Lowered from 0.12 → 0.08: 'call'/'pain' sometimes have only a 0.09-0.11 margin
+    # over the second-best class; 0.12 caused them to be labelled 'detecting' indefinitely.
+    MARGIN_THRESHOLD = 0.08
     fps, prev_time = 30.0, time.time()
     frame_idx = 0
     infer_ms = []
